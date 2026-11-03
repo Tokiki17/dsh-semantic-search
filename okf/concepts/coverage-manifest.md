@@ -17,4 +17,4 @@ generated:
 | Measured local performance | [README.zh.md](../../README.zh.md) local benchmark section | [Verification status](verification-status.md) | current | single machine only |
 | What has and has not been verified | — | [Verification status](verification-status.md) | current | cloud backends and a real model session are pending |
 | Build, test, release commands and repo rules | [AGENTS.md](../../AGENTS.md) | — | current | — |
-| Market distribution | [scripts/market-index.mjs](../../scripts/market-index.mjs), `market/index.json` | [Verification status](verification-status.md) | pending publish | GitHub repository not created yet |
+| Market distribution | [scripts/market-index.mjs](../../scripts/market-index.mjs), [market/index.json](../../market/index.json) | [Verification status](verification-status.md) | current (0.1.0 published) | Desktop market UI install not exercised |
