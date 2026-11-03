@@ -9,13 +9,12 @@ import { fakeBackend, tempDir } from './helpers.ts'
 
 const signal = new AbortController().signal
 
-function makeKb(storageDir: string, backend: () => Backend, overrides: Partial<{ refreshBeforeSearch: boolean; rerank: boolean }> = {}) {
+function makeKb(storageDir: string, backend: () => Backend, overrides: Partial<{ refreshBeforeSearch: boolean }> = {}) {
   return new KnowledgeBase({
     storageDir,
     backend,
     index: { chunkChars: 400, overlapChars: 50, maxFileBytes: 1 << 20, maxFiles: 1000, excludeDirs: DEFAULT_EXCLUDE_DIRS, extraExtensions: [] },
     search: { topK: 3, candidates: 20, rerankCandidates: 10, maxSnippetChars: 500, refreshBeforeSearch: overrides.refreshBeforeSearch ?? true, maxRefreshFiles: 5 },
-    rerank: overrides.rerank ?? true,
   })
 }
 
@@ -86,6 +85,8 @@ test('named collections, reranking, staleness and removal', async () => {
   writeFileSync(join(manuals, 'printer.txt'), 'Printer toner replacement guide.\nOpen the front cover first.\n')
   const reranker: Reranker = {
     id: 'reverse',
+    remote: false,
+    endpoint: 'fake',
     async rerank(_query, documents, topN) {
       return documents.map((_, index) => ({ index, score: index })).reverse().slice(0, topN)
     },
@@ -111,7 +112,8 @@ test('named collections, reranking, staleness and removal', async () => {
 
     backend = fakeBackend({ id: 'other|model|64' })
     const stale = await kb.search('toner', { cwd: dir.path, signal })
-    assert.equal(stale.hits.length, 0)
+    assert.equal(stale.ranking, 'keyword', 'vectors from another model are not compared with the query')
+    assert.match(stale.hits[0]!.path, /printer\.txt$/)
     assert.ok(stale.notes.some((note) => /rebuild/.test(note)))
     assert.equal(kb.list(dir.path).find((info) => info.name === 'manuals')!.stale, true)
 
@@ -140,6 +142,38 @@ test('concurrent indexing of one collection is rejected', async () => {
     const first = kb.index(plan, { signal })
     await assert.rejects(kb.index(plan, { signal }), /already being indexed/)
     await first
+  } finally {
+    kb.close()
+    dir.cleanup()
+  }
+})
+
+test('without an embedding model collections are built and searched by keyword', async () => {
+  const dir = tempDir()
+  const root = join(dir.path, 'proj')
+  project(root)
+  let backend: Backend = { embedder: undefined, reranker: undefined }
+  const kb = makeKb(join(dir.path, 'store'), () => backend)
+  try {
+    const stats = await kb.index(kb.planIndex('workspace', undefined, root), { signal })
+    assert.equal(stats.added, 3)
+    const result = await kb.search('rerank 模型', { cwd: root, signal })
+    assert.equal(result.ranking, 'keyword')
+    assert.equal(result.hits[0]!.path, 'docs/deploy.md')
+    assert.deepEqual(result.notes, [])
+    assert.equal(kb.list(root)[0]!.stale, false)
+
+    // Adding a model later marks the collection stale, keeps keyword search working, and the next index embeds it.
+    const embedding = fakeBackend()
+    backend = embedding
+    assert.equal(kb.list(root)[0]!.stale, true)
+    const interim = await kb.search('rerank 模型', { cwd: root, signal })
+    assert.equal(interim.ranking, 'keyword')
+    assert.ok(interim.notes.some((note) => /keyword search only/.test(note)), interim.notes.join('\n'))
+    const rebuilt = await kb.index(kb.planIndex('workspace', undefined, root), { signal })
+    assert.equal(rebuilt.added, 3)
+    assert.ok(embedding.calls.documents > 0)
+    assert.equal((await kb.search('rerank 模型', { cwd: root, signal })).ranking, 'fusion')
   } finally {
     kb.close()
     dir.cleanup()

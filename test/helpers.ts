@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import type { Backend, Embedder, Reranker } from '../src/backends/types.ts'
 import { toUnitVector } from '../src/backends/types.ts'
 
-export function tempDir(prefix = 'qwen-rag-test-'): { path: string; cleanup(): void } {
+export function tempDir(prefix = 'semantic-search-test-'): { path: string; cleanup(): void } {
   const path = mkdtempSync(join(tmpdir(), prefix))
   return { path, cleanup: () => rmSync(path, { recursive: true, force: true }) }
 }

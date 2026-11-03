@@ -1,39 +1,47 @@
 /**
  * Plugin configuration (Schemastery, so DSH's config editor and generated
- * docs can read it) and the pure resolution step that fills backend presets.
+ * docs can read it) and the pure step that resolves the two model roles —
+ * embedding and rerank — into concrete endpoints and models.
  */
 import z from '@deepseek-ai/schemastery'
 
-export type BackendKind = 'dashscope' | 'openai-compatible'
-export type Preset = 'local' | 'siliconflow' | 'custom'
+export type EmbeddingSource = 'none' | 'local' | 'dashscope' | 'siliconflow' | 'custom'
+export type RerankSource = 'same' | 'off' | Exclude<EmbeddingSource, 'none'>
+export type ModelSource = Exclude<EmbeddingSource, 'none'>
 export type QueryFormat = 'qwen3' | 'plain'
 export type ApprovalMode = 'remote' | 'always' | 'never'
+export type DownloadSource = 'auto' | 'huggingface' | 'hf-mirror' | 'modelscope'
 
 export interface Config {
-  backend: BackendKind
-  dashscope: {
-    baseURL: string
-    apiKeyEnv: string
-    embeddingModel: string
-    rerankModel: string
+  embedding: {
+    source: EmbeddingSource
+    model?: string
     dimensions: number
-    batchSize: number
-  }
-  openaiCompatible: {
-    preset: Preset
-    embeddingBaseURL?: string
-    rerankBaseURL?: string
-    apiKeyEnv?: string
-    embeddingModel?: string
-    rerankModel?: string
-    dimensions?: number
-    sendDimensions?: boolean
     batchSize?: number
-    queryFormat?: QueryFormat
+  }
+  rerank: {
+    source: RerankSource
+    model?: string
+  }
+  providers: {
+    dashscope: { baseURL: string; apiKeyEnv: string }
+    siliconflow: { baseURL: string; apiKeyEnv: string }
+    custom: {
+      baseURL?: string
+      rerankBaseURL?: string
+      apiKeyEnv?: string
+      queryFormat: QueryFormat
+      sendDimensions: boolean
+    }
+  }
+  local: {
+    ctx: number
+    idleStopMinutes: number
+    downloadSource: DownloadSource
+    githubMirror?: string
   }
   queryInstruct: string
   rerankInstruct: string
-  rerank: boolean
   approval: ApprovalMode
   storageDir?: string
   requestTimeoutMs: number
@@ -63,37 +71,52 @@ export const DEFAULT_EXCLUDE_DIRS = [
   '.tox', '.gradle', '.idea', '.dsh', 'DerivedData', 'Pods',
 ]
 
+const MODEL_SOURCES = ['local', 'dashscope', 'siliconflow', 'custom'] as const
+
 export const Config: z<Config> = z.object({
-  backend: z.union(['dashscope', 'openai-compatible'] as const).default('dashscope')
-    .description('Embedding/rerank backend: Alibaba Cloud Model Studio (dashscope) or an OpenAI-compatible server (local llama-server, SiliconFlow, …).'),
-  dashscope: z.object({
-    baseURL: z.string().default('https://dashscope.aliyuncs.com')
-      .description('DashScope origin. Singapore: https://dashscope-intl.aliyuncs.com; workspace domain: https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com'),
-    apiKeyEnv: z.string().default('DASHSCOPE_API_KEY').description('Credential name resolved through DSH credentials, then the environment / harness .env.'),
-    embeddingModel: z.string().default('qwen3.7-text-embedding'),
-    rerankModel: z.string().default('qwen3.7-text-rerank'),
-    dimensions: z.natural().min(64).max(4096).default(1024),
-    batchSize: z.natural().min(1).max(20).default(10),
-  }).default({}),
-  openaiCompatible: z.object({
-    preset: z.union(['local', 'siliconflow', 'custom'] as const).default('local')
-      .description('local = llama-server on 127.0.0.1:8081 (embedding) and :8082 (rerank); siliconflow = api.siliconflow.cn Qwen3 4B models.'),
-    embeddingBaseURL: z.string().description('Overrides the preset, e.g. http://127.0.0.1:8081/v1'),
-    rerankBaseURL: z.string().description('Overrides the preset; leave the preset value or set rerank: false to skip reranking.'),
-    apiKeyEnv: z.string(),
-    embeddingModel: z.string(),
-    rerankModel: z.string(),
-    dimensions: z.natural().min(32).max(4096),
-    sendDimensions: z.boolean(),
+  embedding: z.object({
+    source: z.union(['none', ...MODEL_SOURCES] as const).default('none')
+      .description('Embedding model source. none = keyword search only (no model, nothing leaves the machine).'),
+    model: z.string().description('Model name; default depends on the source (local: qwen3-embedding-0.6b, 4b or 8b).'),
+    dimensions: z.natural().min(32).max(4096).default(1024),
     batchSize: z.natural().min(1).max(256),
-    queryFormat: z.union(['qwen3', 'plain'] as const).description('qwen3 wraps queries as "Instruct: …\\nQuery:…" for Qwen3-Embedding.'),
-  }).default({ preset: 'local' }),
+  }).default({ source: 'none' }),
+  rerank: z.object({
+    source: z.union(['same', 'off', ...MODEL_SOURCES] as const).default('same')
+      .description('Rerank model source. same = the embedding source (off when that is none).'),
+    model: z.string().description('Model name; default depends on the source.'),
+  }).default({ source: 'same' }),
+  providers: z.object({
+    dashscope: z.object({
+      baseURL: z.string().default('https://dashscope.aliyuncs.com')
+        .description('DashScope origin. Singapore: https://dashscope-intl.aliyuncs.com'),
+      apiKeyEnv: z.string().default('DASHSCOPE_API_KEY').description('Credential name resolved through DSH credentials, then the environment / harness .env.'),
+    }).default({}),
+    siliconflow: z.object({
+      baseURL: z.string().default('https://api.siliconflow.cn/v1'),
+      apiKeyEnv: z.string().default('SILICONFLOW_API_KEY'),
+    }).default({}),
+    custom: z.object({
+      baseURL: z.string().description('OpenAI-compatible base URL serving /embeddings (and /rerank), e.g. https://example.com/v1'),
+      rerankBaseURL: z.string().description('Base URL for /rerank when it differs from baseURL.'),
+      apiKeyEnv: z.string().description('Credential name; leave empty for servers without authentication.'),
+      queryFormat: z.union(['qwen3', 'plain'] as const).default('plain')
+        .description('qwen3 wraps queries as "Instruct: …\\nQuery:…" for Qwen3-Embedding.'),
+      sendDimensions: z.boolean().default(false).description('Send `dimensions` to the server instead of truncating client-side.'),
+    }).default({}),
+  }).default({}),
+  local: z.object({
+    ctx: z.natural().min(1024).max(32768).default(8192).description('llama-server context and batch size; 2048 saves memory.'),
+    idleStopMinutes: z.natural().default(10).description('Stop local model servers after this many idle minutes (0 = keep running).'),
+    downloadSource: z.union(['auto', 'huggingface', 'hf-mirror', 'modelscope'] as const).default('auto')
+      .description('Where model files come from; auto picks the fastest.'),
+    githubMirror: z.string().description('Prefix for llama.cpp release downloads, e.g. https://ghproxy.example/'),
+  }).default({}),
   queryInstruct: z.string().default(DEFAULT_QUERY_INSTRUCT).description('English task instruction for query embeddings.'),
   rerankInstruct: z.string().default('').description('Optional rerank instruction (empty = provider default).'),
-  rerank: z.boolean().default(true),
   approval: z.union(['remote', 'always', 'never'] as const).default('remote')
     .description('When knowledge_index asks for approval: remote = only when document text leaves this machine.'),
-  storageDir: z.string().description('Index storage directory; default <DSH home>/qwen-rag.'),
+  storageDir: z.string().description('Index storage directory; default <DSH home>/semantic-search.'),
   requestTimeoutMs: z.natural().min(1000).default(60000),
   index: z.object({
     chunkChars: z.natural().min(200).max(8000).default(1200),
@@ -114,66 +137,101 @@ export const Config: z<Config> = z.object({
   }).default({}),
 }) as z<Config>
 
-export interface OpenAICompatiblePresetValues {
-  embeddingBaseURL: string
-  rerankBaseURL: string | undefined
-  apiKeyEnv: string | undefined
-  embeddingModel: string
-  rerankModel: string | undefined
-  dimensions: number
-  sendDimensions: boolean
-  batchSize: number
-  queryFormat: QueryFormat
+/** Wire protocol of a resolved model endpoint. */
+export type Protocol = 'dashscope' | 'openai'
+
+export interface ResolvedEmbedding {
+  readonly source: ModelSource
+  readonly protocol: Protocol
+  /** Undefined for `local`: the local server manager supplies it on demand. */
+  readonly baseURL: string | undefined
+  readonly apiKeyEnv: string | undefined
+  readonly model: string
+  readonly dimensions: number
+  readonly sendDimensions: boolean
+  readonly batchSize: number
+  readonly queryFormat: QueryFormat
 }
 
-export const PRESETS: Record<Exclude<Preset, 'custom'>, OpenAICompatiblePresetValues> = {
-  local: {
-    embeddingBaseURL: 'http://127.0.0.1:8081/v1',
-    rerankBaseURL: 'http://127.0.0.1:8082/v1',
-    apiKeyEnv: undefined,
-    embeddingModel: 'qwen3-embedding-0.6b',
-    rerankModel: 'qwen3-reranker-0.6b',
-    dimensions: 1024,
-    sendDimensions: false,
-    batchSize: 16,
-    queryFormat: 'qwen3',
-  },
-  siliconflow: {
-    embeddingBaseURL: 'https://api.siliconflow.cn/v1',
-    rerankBaseURL: 'https://api.siliconflow.cn/v1',
-    apiKeyEnv: 'SILICONFLOW_API_KEY',
-    embeddingModel: 'Qwen/Qwen3-Embedding-4B',
-    rerankModel: 'Qwen/Qwen3-Reranker-4B',
-    dimensions: 1024,
-    sendDimensions: true,
-    batchSize: 16,
-    queryFormat: 'qwen3',
-  },
+export interface ResolvedRerank {
+  readonly source: ModelSource
+  readonly protocol: Protocol
+  readonly baseURL: string | undefined
+  readonly apiKeyEnv: string | undefined
+  readonly model: string
 }
 
-/** Fill preset values under explicit overrides; `custom` requires the embedding URL and model. */
-export function resolveOpenAICompatible(config: Config['openaiCompatible']): OpenAICompatiblePresetValues {
-  const preset = config.preset === 'custom' ? undefined : PRESETS[config.preset]
-  const embeddingBaseURL = config.embeddingBaseURL ?? preset?.embeddingBaseURL
-  const embeddingModel = config.embeddingModel ?? preset?.embeddingModel
-  if (!embeddingBaseURL || !embeddingModel) {
-    throw new Error('qwen-rag: openaiCompatible.preset "custom" requires embeddingBaseURL and embeddingModel')
+export interface ResolvedModels {
+  readonly embedding: ResolvedEmbedding | undefined
+  readonly rerank: ResolvedRerank | undefined
+}
+
+/** Built-in defaults per source; `custom` has none and needs explicit models. */
+export const SOURCE_DEFAULTS = {
+  local: { embeddingModel: 'qwen3-embedding-0.6b', rerankModel: 'qwen3-reranker-0.6b', batchSize: 16, queryFormat: 'qwen3', sendDimensions: false },
+  dashscope: { embeddingModel: 'qwen3.7-text-embedding', rerankModel: 'qwen3.7-text-rerank', batchSize: 10, queryFormat: 'plain', sendDimensions: true },
+  siliconflow: { embeddingModel: 'Qwen/Qwen3-Embedding-4B', rerankModel: 'Qwen/Qwen3-Reranker-4B', batchSize: 16, queryFormat: 'qwen3', sendDimensions: true },
+} as const satisfies Record<Exclude<ModelSource, 'custom'>, unknown>
+
+/** Resolve both roles; throws with a field name when a `custom` source is incomplete. */
+export function resolveModels(config: Config): ResolvedModels {
+  const embeddingSource = config.embedding.source
+  const embedding = embeddingSource === 'none' ? undefined : resolveEmbedding(config, embeddingSource)
+
+  let rerankSource = config.rerank.source
+  let implicit = false
+  if (rerankSource === 'same') {
+    if (embeddingSource === 'none') return { embedding, rerank: undefined }
+    rerankSource = embeddingSource
+    implicit = true
   }
+  if (rerankSource === 'off') return { embedding, rerank: undefined }
+  const rerankModel = config.rerank.model || (rerankSource === 'custom' ? undefined : SOURCE_DEFAULTS[rerankSource].rerankModel)
+  if (rerankModel === undefined) {
+    // A custom service may not serve /rerank; following it implicitly simply turns rerank off.
+    if (implicit) return { embedding, rerank: undefined }
+    throw new Error('semantic-search: rerank.source "custom" requires rerank.model')
+  }
+  const endpoint = endpointOf(config, rerankSource, 'rerank')
+  return { embedding, rerank: { source: rerankSource, ...endpoint, model: rerankModel } }
+}
+
+function resolveEmbedding(config: Config, source: ModelSource): ResolvedEmbedding {
+  const endpoint = endpointOf(config, source, 'embedding')
+  if (source === 'custom') {
+    if (!config.embedding.model) throw new Error('semantic-search: embedding.source "custom" requires embedding.model')
+    return {
+      source, ...endpoint, model: config.embedding.model, dimensions: config.embedding.dimensions,
+      sendDimensions: config.providers.custom.sendDimensions, batchSize: config.embedding.batchSize ?? 16,
+      queryFormat: config.providers.custom.queryFormat,
+    }
+  }
+  const defaults = SOURCE_DEFAULTS[source]
   return {
-    embeddingBaseURL,
-    rerankBaseURL: config.rerankBaseURL ?? preset?.rerankBaseURL,
-    apiKeyEnv: config.apiKeyEnv ?? preset?.apiKeyEnv,
-    embeddingModel,
-    rerankModel: config.rerankModel ?? preset?.rerankModel,
-    dimensions: config.dimensions ?? preset?.dimensions ?? 1024,
-    sendDimensions: config.sendDimensions ?? preset?.sendDimensions ?? false,
-    batchSize: config.batchSize ?? preset?.batchSize ?? 16,
-    queryFormat: config.queryFormat ?? preset?.queryFormat ?? 'plain',
+    source, ...endpoint, model: config.embedding.model || defaults.embeddingModel, dimensions: config.embedding.dimensions,
+    sendDimensions: defaults.sendDimensions, batchSize: config.embedding.batchSize ?? defaults.batchSize, queryFormat: defaults.queryFormat,
+  }
+}
+
+function endpointOf(config: Config, source: ModelSource, role: 'embedding' | 'rerank'): { protocol: Protocol; baseURL: string | undefined; apiKeyEnv: string | undefined } {
+  switch (source) {
+    case 'local':
+      return { protocol: 'openai', baseURL: undefined, apiKeyEnv: undefined }
+    case 'dashscope':
+      return { protocol: 'dashscope', baseURL: config.providers.dashscope.baseURL, apiKeyEnv: config.providers.dashscope.apiKeyEnv }
+    case 'siliconflow':
+      return { protocol: 'openai', baseURL: config.providers.siliconflow.baseURL, apiKeyEnv: config.providers.siliconflow.apiKeyEnv }
+    case 'custom': {
+      const custom = config.providers.custom
+      const baseURL = role === 'rerank' ? custom.rerankBaseURL || custom.baseURL : custom.baseURL
+      if (!baseURL) throw new Error('semantic-search: the custom source requires providers.custom.baseURL')
+      return { protocol: 'openai', baseURL, apiKeyEnv: custom.apiKeyEnv || undefined }
+    }
   }
 }
 
 /** Validate a POSIX-style credential / environment variable name. */
 export function assertCredentialName(name: string): string {
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(`qwen-rag: invalid credential name ${JSON.stringify(name)}`)
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(`semantic-search: invalid credential name ${JSON.stringify(name)}`)
   return name
 }

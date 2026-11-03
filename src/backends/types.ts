@@ -22,12 +22,24 @@ export interface RerankHit {
 
 export interface Reranker {
   readonly id: string
+  /** True when queries and candidate passages leave this machine. */
+  readonly remote: boolean
+  readonly endpoint: string
   rerank(query: string, documents: readonly string[], topN: number, signal: AbortSignal): Promise<RerankHit[]>
 }
 
+/** Either role may be absent: no embedder means keyword-only search, no reranker means fusion order. */
 export interface Backend {
-  readonly embedder: Embedder
+  readonly embedder: Embedder | undefined
   readonly reranker: Reranker | undefined
+}
+
+/** Embedder id recorded for collections built without vectors. */
+export const KEYWORD_ONLY = 'keyword-only'
+
+/** Supplies the base URL of a plugin-managed local model server, starting it on demand. */
+export interface LocalModels {
+  baseURL(role: 'embedding' | 'rerank', model: string, signal: AbortSignal): Promise<string>
 }
 
 /** Truncate (Matryoshka) and L2-normalize one raw embedding. */

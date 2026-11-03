@@ -1,14 +1,16 @@
 /**
  * Knowledge-base façade used by the tools: resolves collections on disk,
  * serializes indexing per collection, and runs hybrid search
- * (dense + keyword → RRF → rerank) across one or more collections.
+ * (dense + keyword → RRF → rerank) across one or more collections. Without
+ * an embedding model every collection is searched by keyword only.
  */
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, relative, resolve, sep } from 'node:path'
-import type { Backend } from './backends/types.ts'
+import { KEYWORD_ONLY, type Backend } from './backends/types.ts'
 import { indexSources, type IndexStats } from './indexer.ts'
+import { scanSources } from './scan.ts'
 import { denseTopK, reciprocalRankFusion } from './retrieve.ts'
 import { Store, toMatchExpression, type ChunkRow } from './store.ts'
 
@@ -34,7 +36,6 @@ export interface KnowledgeBaseOptions {
     readonly refreshBeforeSearch: boolean
     readonly maxRefreshFiles: number
   }
-  readonly rerank: boolean
 }
 
 export interface CollectionRef {
@@ -71,7 +72,8 @@ export interface SearchHit {
 
 export interface SearchResult {
   readonly hits: SearchHit[]
-  readonly ranking: 'rerank' | 'fusion'
+  /** `keyword` when no collection could be searched by vector. */
+  readonly ranking: 'rerank' | 'fusion' | 'keyword'
   readonly searched: string[]
   readonly notes: string[]
 }
@@ -179,6 +181,29 @@ export class KnowledgeBase {
     })
   }
 
+  /** Size of the files an index run would (re-)embed, for the approval prompt; a rebuild or model change counts every file. */
+  async estimate(plan: { ref: CollectionRef; sources: string[] }, rebuild: boolean, signal: AbortSignal): Promise<{ files: number; bytes: number }> {
+    const { index } = this.options
+    const scan = await scanSources(plan.sources, {
+      excludeDirs: index.excludeDirs, extraExtensions: index.extraExtensions, maxFiles: index.maxFiles, maxFileBytes: index.maxFileBytes, signal,
+    })
+    let known = new Map<string, { size: number; mtimeMs: number }>()
+    if (!rebuild && this.exists(plan.ref)) {
+      const store = this.open(plan.ref)
+      const currentId = safeEmbedderId(this.options.backend)
+      if (store.getMeta('embedder') === currentId) known = new Map(store.files().map((row) => [row.path, row]))
+    }
+    let files = 0
+    let bytes = 0
+    for (const file of scan.files) {
+      const row = known.get(file.path)
+      if (row !== undefined && row.size === file.size && row.mtimeMs === file.mtimeMs) continue
+      files += 1
+      bytes += file.size
+    }
+    return { files, bytes }
+  }
+
   list(cwd: string): CollectionInfo[] {
     const current = this.ref(WORKSPACE, cwd)
     const infos: CollectionInfo[] = []
@@ -205,7 +230,7 @@ export class KnowledgeBase {
           files: counts.files,
           chunks: counts.chunks,
           embedder: meta.embedder,
-          stale: meta.embedder !== undefined && embedderId !== undefined && meta.embedder !== embedderId,
+          stale: meta.embedder !== undefined && embedderId !== undefined && counts.chunks > 0 && meta.embedder !== embedderId,
           updatedAt: meta.updatedAt,
           current: dbPath === current.dbPath,
         })
@@ -243,10 +268,10 @@ export class KnowledgeBase {
     request: { collections?: readonly string[]; topK?: number; cwd: string; signal: AbortSignal },
   ): Promise<SearchResult> {
     const notes: string[] = []
-    const backend = this.options.backend()
-    const { embedder } = backend
+    const { embedder, reranker } = this.options.backend()
+    const currentId = embedder?.id ?? KEYWORD_ONLY
     const refs = this.searchTargets(request.collections, request.cwd, notes)
-    const usable: Array<{ ref: CollectionRef; store: Store }> = []
+    const usable: Array<{ ref: CollectionRef; store: Store; dense: boolean }> = []
     for (const ref of refs) {
       const store = this.open(ref)
       const id = store.getMeta('embedder')
@@ -254,25 +279,30 @@ export class KnowledgeBase {
         notes.push(`collection "${ref.name}" is empty; run knowledge_index first`)
         continue
       }
-      if (id !== embedder.id) {
-        notes.push(`collection "${ref.name}" was built with ${id} but the current backend is ${embedder.id}; rebuild it with knowledge_index (rebuild: true)`)
-        continue
-      }
-      if (this.isIndexing(ref)) {
+      if (id !== currentId) {
+        // Vectors from another model (or none at all) cannot be compared with this query; keyword search still works.
+        notes.push(
+          embedder === undefined
+            ? `collection "${ref.name}" was built with ${id}, but no embedding model is configured now; searched by keyword only and not refreshed`
+            : `collection "${ref.name}" was built ${id === KEYWORD_ONLY ? 'for keyword search only' : `with ${id}`}, but the current embedding model is ${embedder.id}; ` +
+              'searched by keyword only. Rebuild it with knowledge_index (rebuild: true) for semantic search',
+        )
+      } else if (this.isIndexing(ref)) {
         notes.push(`collection "${ref.name}" is being indexed right now; results may be incomplete`)
       } else if (this.options.search.refreshBeforeSearch) {
         await this.refresh(ref, store, request.signal, notes)
       }
-      usable.push({ ref, store })
+      usable.push({ ref, store, dense: embedder !== undefined && id === embedder.id })
     }
-    if (usable.length === 0) return { hits: [], ranking: 'fusion', searched: [], notes }
+    const anyDense = usable.some((item) => item.dense)
+    if (usable.length === 0) return { hits: [], ranking: 'keyword', searched: [], notes }
 
-    const queryVector = await embedder.embedQuery(query, request.signal)
+    const queryVector = anyDense ? await embedder!.embedQuery(query, request.signal) : undefined
     const match = toMatchExpression(query)
     const { candidates } = this.options.search
     const pool: Candidate[] = []
-    for (const { ref, store } of usable) {
-      const dense = denseTopK(store.vectors(embedder.dims), queryVector, candidates).map((hit) => hit.id)
+    for (const { ref, store, dense: useDense } of usable) {
+      const dense = useDense ? denseTopK(store.vectors(embedder!.dims), queryVector!, candidates).map((hit) => hit.id) : []
       let keyword: number[] = []
       if (match !== undefined) {
         try {
@@ -298,16 +328,16 @@ export class KnowledgeBase {
       return row.heading ? `${row.heading}\n${body}` : body
     })
 
-    let ranking: SearchResult['ranking'] = 'fusion'
+    let ranking: SearchResult['ranking'] = anyDense ? 'fusion' : 'keyword'
     let ordered: Array<{ candidate: Candidate; score: number }> = shortlist.map((candidate) => ({ candidate, score: candidate.fused }))
-    if (this.options.rerank && backend.reranker !== undefined && shortlist.length > 1) {
+    if (reranker !== undefined && shortlist.length > 1) {
       try {
-        const hits = await backend.reranker.rerank(query, docs, topK, request.signal)
+        const hits = await reranker.rerank(query, docs, topK, request.signal)
         ordered = hits.map((hit) => ({ candidate: shortlist[hit.index]!, score: hit.score }))
         ranking = 'rerank'
       } catch (error) {
         if (request.signal.aborted) throw error
-        notes.push(`rerank unavailable, results ordered by hybrid fusion: ${error instanceof Error ? error.message : String(error)}`)
+        notes.push(`rerank unavailable, results kept in ${ranking === 'keyword' ? 'keyword' : 'hybrid fusion'} order: ${error instanceof Error ? error.message : String(error)}`)
       }
     }
 
@@ -407,7 +437,7 @@ function parseSources(value: string | undefined): string[] {
 
 function safeEmbedderId(backend: () => Backend): string | undefined {
   try {
-    return backend().embedder.id
+    return backend().embedder?.id ?? KEYWORD_ONLY
   } catch {
     return undefined
   }

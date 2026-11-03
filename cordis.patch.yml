@@ -1,13 +1,15 @@
-# Bundle layer for @tokiki/dsh-qwen-rag. Override the row by id in your
-# profile's cordis.patch.yml, e.g. to switch to the local llama-server backend:
+# Bundle layer for @tokiki/dsh-semantic-search. Configure it from
+# Plugins → Semantic Search → Configure, or override the row by id in your
+# profile's cordis.patch.yml, e.g. local models managed by the plugin:
 #
-# - id: qwen-rag
+# - id: semantic-search
 #   config:
-#     backend: openai-compatible
-#     openaiCompatible:
-#       preset: local
+#     embedding:
+#       source: local
+#       model: qwen3-embedding-0.6b
+#     rerank:
+#       source: same
 - insert:
-    - id: qwen-rag
-      name: '@tokiki/dsh-qwen-rag'
-      config:
-        backend: dashscope
+    - id: semantic-search
+      name: '@tokiki/dsh-semantic-search'
+      config: {}

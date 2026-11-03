@@ -1,12 +1,13 @@
 /**
  * Incremental indexing: scan sources, skip files whose size+mtime (then
- * sha256) are unchanged, embed changed files in batches, and replace each
+ * sha256) are unchanged, embed changed files in batches (or store them for
+ * keyword search only when no embedder is configured), and replace each
  * file's chunks atomically. Deleted files are pruned unless the scan was
  * truncated by `maxFiles`.
  */
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
-import type { Embedder } from './backends/types.ts'
+import { KEYWORD_ONLY, type Embedder } from './backends/types.ts'
 import { chunkDocument, embeddingInput, type Chunk } from './chunk.ts'
 import { parseFile, SkipFile } from './parse.ts'
 import { isWithin, scanSources, type ScannedFile } from './scan.ts'
@@ -55,15 +56,19 @@ interface Pending {
 
 const MAX_ERRORS = 20
 
-export async function indexSources(store: Store, embedder: Embedder, options: IndexOptions): Promise<IndexStats> {
+const NO_VECTOR = new Float32Array(0)
+
+export async function indexSources(store: Store, embedder: Embedder | undefined, options: IndexOptions): Promise<IndexStats> {
   const started = Date.now()
   const { signal } = options
   const stats: IndexStats = {
     scanned: 0, added: 0, updated: 0, unchanged: 0, removed: 0, skipped: 0, chunks: 0,
     oversized: 0, truncated: false, missing: [], errors: [], ms: 0,
   }
+  const embedderId = embedder?.id ?? KEYWORD_ONLY
+  const dims = String(embedder?.dims ?? 0)
   const previousEmbedder = store.getMeta('embedder')
-  const embedderChanged = previousEmbedder !== undefined && previousEmbedder !== embedder.id
+  const embedderChanged = previousEmbedder !== undefined && previousEmbedder !== embedderId
   if (embedderChanged && options.maxChanged !== undefined) {
     // A search-time refresh never rebuilds; the caller reports the collection as stale.
     stats.deferred = Number.POSITIVE_INFINITY
@@ -71,7 +76,7 @@ export async function indexSources(store: Store, embedder: Embedder, options: In
   }
   if (options.rebuild || embedderChanged) store.clear()
   // Record the embedder before the first write so a partial run is never mistaken for another model's vectors.
-  if (previousEmbedder !== embedder.id) store.setMeta({ embedder: embedder.id, dims: String(embedder.dims) })
+  if (previousEmbedder !== embedderId) store.setMeta({ embedder: embedderId, dims })
 
   const scan = await scanSources(options.sources, {
     excludeDirs: options.excludeDirs,
@@ -104,24 +109,26 @@ export async function indexSources(store: Store, embedder: Embedder, options: In
 
   if (gone.length > 0) stats.removed = store.removeFiles(gone)
 
-  const batchTarget = Math.max(embedder.batchSize * 4, 32)
+  const batchTarget = embedder === undefined ? 256 : Math.max(embedder.batchSize * 4, 32)
   let pending: Pending[] = []
   let pendingChunks = 0
   let done = 0
   const flush = async (): Promise<void> => {
     if (pending.length === 0) return
-    const inputs: string[] = []
-    for (const item of pending) {
-      for (const chunk of item.chunks) inputs.push(embeddingInput(options.label(item.file.path), chunk, options.chunkChars * 2))
-    }
     const vectors: Float32Array[] = []
-    for (let i = 0; i < inputs.length; i += embedder.batchSize) {
-      if (signal.aborted) throw signal.reason
-      vectors.push(...(await embedder.embedDocuments(inputs.slice(i, i + embedder.batchSize), signal)))
+    if (embedder !== undefined) {
+      const inputs: string[] = []
+      for (const item of pending) {
+        for (const chunk of item.chunks) inputs.push(embeddingInput(options.label(item.file.path), chunk, options.chunkChars * 2))
+      }
+      for (let i = 0; i < inputs.length; i += embedder.batchSize) {
+        if (signal.aborted) throw signal.reason
+        vectors.push(...(await embedder.embedDocuments(inputs.slice(i, i + embedder.batchSize), signal)))
+      }
     }
     let offset = 0
     for (const item of pending) {
-      const rows: NewChunk[] = item.chunks.map((chunk, index) => ({ chunk, vector: vectors[offset + index]! }))
+      const rows: NewChunk[] = item.chunks.map((chunk, index) => ({ chunk, vector: vectors[offset + index] ?? NO_VECTOR }))
       offset += item.chunks.length
       store.replaceFile(item.file.path, item.file.mtimeMs, item.file.size, item.sha256, rows)
       if (item.existed) stats.updated += 1
@@ -171,7 +178,7 @@ export async function indexSources(store: Store, embedder: Embedder, options: In
   }
   await flush()
 
-  store.setMeta({ embedder: embedder.id, dims: String(embedder.dims), updatedAt: new Date().toISOString() })
+  store.setMeta({ embedder: embedderId, dims, updatedAt: new Date().toISOString() })
   return finish(stats, started)
 }
 

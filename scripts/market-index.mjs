@@ -12,7 +12,7 @@ const pkg = JSON.parse(read('package.json'))
 const en = JSON.parse(read('locale/en.json')).meta
 const zh = JSON.parse(read('locale/zh.json')).meta
 const commit = process.argv[2] ?? execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim()
-const indexUrl = process.argv[3] ?? 'https://raw.githubusercontent.com/Tokiki17/dsh-qwen-rag/main/market/index.json'
+const indexUrl = process.argv[3] ?? 'https://raw.githubusercontent.com/Tokiki17/dsh-semantic-search/main/market/index.json'
 const committedAt = Number(execFileSync('git', ['show', '-s', '--format=%ct', commit], { cwd: root, encoding: 'utf8' }).trim())
 const tracked = execFileSync('git', ['ls-tree', '-r', '--name-only', commit, 'lib/index.js'], { cwd: root, encoding: 'utf8' }).trim()
 if (tracked !== 'lib/index.js') throw new Error(`commit ${commit} does not contain lib/index.js; build and commit lib/ first`)

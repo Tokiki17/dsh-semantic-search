@@ -1,20 +1,47 @@
 /**
- * OpenAI-compatible `/embeddings` plus Jina/Cohere-style `/rerank`. Covers a
- * local llama-server running Qwen3-Embedding / Qwen3-Reranker GGUF files, and
- * hosted providers that serve the same open models (e.g. SiliconFlow).
+ * OpenAI-compatible `/embeddings` plus Jina/Cohere-style `/rerank`. Covers the
+ * plugin-managed llama-server running Qwen3-Embedding / Qwen3-Reranker GGUF
+ * files, and hosted providers that serve the same open models (SiliconFlow).
  */
 import { isLoopbackUrl, postJson } from '../http.ts'
 import { parseEmbeddings, parseRerank } from './dashscope.ts'
-import { qwen3Query, type Backend, type Embedder, type Reranker } from './types.ts'
+import { qwen3Query, type Embedder, type Reranker } from './types.ts'
 
-export interface OpenAICompatibleSettings {
+export interface OpenAICompatibleAccess {
+  /** Short provider name used in error messages. */
   readonly name: string
-  readonly embeddingBaseURL: string
-  readonly rerankBaseURL: string | undefined
+  /** A fixed base URL, or a resolver for servers started on demand (always loopback). */
+  readonly baseURL: string | ((signal: AbortSignal) => Promise<string>)
   readonly apiKey: () => Promise<string | undefined>
   readonly apiKeyEnv: string | undefined
-  readonly embeddingModel: string
-  readonly rerankModel: string | undefined
+  readonly timeoutMs: number
+}
+
+function access(settings: OpenAICompatibleAccess): {
+  remote: boolean
+  display: string
+  base(signal: AbortSignal): Promise<string>
+  key(): Promise<string | undefined>
+} {
+  const fixed = typeof settings.baseURL === 'string' ? settings.baseURL.replace(/\/+$/, '') : undefined
+  const remote = fixed !== undefined && !isLoopbackUrl(fixed)
+  const resolver = settings.baseURL
+  return {
+    remote,
+    display: fixed ?? settings.name,
+    base: async (signal) => fixed ?? (await (resolver as (signal: AbortSignal) => Promise<string>)(signal)).replace(/\/+$/, ''),
+    async key() {
+      const value = await settings.apiKey()
+      if (!value && settings.apiKeyEnv && remote) {
+        throw new Error(`${settings.name}: API key not found; save it in Plugins → Semantic Search → Configure, or set ${settings.apiKeyEnv} in DSH credentials or the harness home .env file.`)
+      }
+      return value
+    },
+  }
+}
+
+export function createOpenAICompatibleEmbedder(settings: OpenAICompatibleAccess & {
+  readonly model: string
   readonly dimensions: number
   /** Send `dimensions` to the server; otherwise truncate client-side (Matryoshka). */
   readonly sendDimensions: boolean
@@ -22,66 +49,58 @@ export interface OpenAICompatibleSettings {
   /** `qwen3` wraps queries as `Instruct: …\nQuery:…`; `plain` sends them as-is. */
   readonly queryFormat: 'qwen3' | 'plain'
   readonly queryInstruct: string
-  readonly rerankInstruct: string | undefined
-  readonly timeoutMs: number
-}
-
-export function createOpenAICompatibleBackend(settings: OpenAICompatibleSettings): Backend {
-  const embeddingBase = settings.embeddingBaseURL.replace(/\/+$/, '')
-  const remote = !isLoopbackUrl(embeddingBase)
-  const key = async (): Promise<string | undefined> => {
-    const value = await settings.apiKey()
-    if (!value && settings.apiKeyEnv && remote) {
-      throw new Error(`${settings.name}: API key not found; set ${settings.apiKeyEnv} in DSH credentials or the harness home .env file.`)
-    }
-    return value
-  }
-
+}): Embedder {
+  const { remote, display, base, key } = access(settings)
+  const label = `${settings.name} embeddings`
   const embed = async (texts: readonly string[], signal: AbortSignal): Promise<Float32Array[]> => {
-    const body: Record<string, unknown> = { model: settings.embeddingModel, input: texts, encoding_format: 'float' }
+    const body: Record<string, unknown> = { model: settings.model, input: texts, encoding_format: 'float' }
     if (settings.sendDimensions) body.dimensions = settings.dimensions
     const response = await postJson({
-      url: `${embeddingBase}/embeddings`,
+      url: `${await base(signal)}/embeddings`,
       body,
       apiKey: await key(),
       signal,
       timeoutMs: settings.timeoutMs,
-      label: `${settings.name} embeddings`,
+      label,
     })
-    return parseEmbeddings(response, texts.length, settings.dimensions, `${settings.name} embeddings`)
+    return parseEmbeddings(response, texts.length, settings.dimensions, label)
   }
-
-  const embedder: Embedder = {
-    id: `openai-compatible|${settings.embeddingModel}|${settings.dimensions}|${settings.queryFormat}`,
+  return {
+    id: `openai-compatible|${settings.model}|${settings.dimensions}|${settings.queryFormat}`,
     dims: settings.dimensions,
     batchSize: settings.batchSize,
     remote,
-    endpoint: `${embeddingBase} (${settings.embeddingModel})`,
+    endpoint: `${display} (${settings.model})`,
     embedDocuments: embed,
     embedQuery: async (text, signal) => {
       const query = settings.queryFormat === 'qwen3' ? qwen3Query(settings.queryInstruct, text) : text
       return (await embed([query], signal))[0]!
     },
   }
+}
 
-  const rerankBase = settings.rerankBaseURL?.replace(/\/+$/, '')
-  const rerankModel = settings.rerankModel
-  const reranker: Reranker | undefined = rerankBase === undefined || rerankModel === undefined ? undefined : {
-    id: `openai-compatible|${rerankModel}`,
+export function createOpenAICompatibleReranker(settings: OpenAICompatibleAccess & {
+  readonly model: string
+  readonly rerankInstruct: string | undefined
+}): Reranker {
+  const { remote, display, base, key } = access(settings)
+  const label = `${settings.name} rerank`
+  return {
+    id: `openai-compatible|${settings.model}`,
+    remote,
+    endpoint: `${display} (${settings.model})`,
     async rerank(query, documents, topN, signal) {
-      const body: Record<string, unknown> = { model: rerankModel, query, documents, top_n: Math.min(topN, documents.length), return_documents: false }
+      const body: Record<string, unknown> = { model: settings.model, query, documents, top_n: Math.min(topN, documents.length), return_documents: false }
       if (settings.rerankInstruct) body.instruction = settings.rerankInstruct
       const response = await postJson({
-        url: `${rerankBase}/rerank`,
+        url: `${await base(signal)}/rerank`,
         body,
         apiKey: await key(),
         signal,
         timeoutMs: settings.timeoutMs,
-        label: `${settings.name} rerank`,
+        label,
       })
-      return parseRerank(response, documents.length, `${settings.name} rerank`)
+      return parseRerank(response, documents.length, label)
     },
   }
-
-  return { embedder, reranker }
 }

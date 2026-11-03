@@ -1,13 +1,14 @@
 {
-  "name": "@tokiki/dsh-qwen-rag",
+  "name": "@tokiki/dsh-semantic-search",
   "version": "0.1.0",
-  "description": "Qwen RAG knowledge base for DeepSeek Harness: hybrid search with Qwen embedding and rerank models, on Alibaba Cloud Model Studio or a local llama-server.",
+  "description": "Semantic Search for DeepSeek Harness: hybrid keyword + embedding search with reranking over your workspace and document folders. Works with no model, local Qwen3 GGUF models the plugin downloads and runs, Alibaba Cloud Model Studio, SiliconFlow, or any OpenAI-compatible service.",
   "license": "MIT",
   "type": "module",
   "icon": "./icon.svg",
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
+    "./typert": "./lib/typert.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
@@ -23,15 +24,22 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Tokiki17/dsh-qwen-rag.git"
+    "url": "git+https://github.com/Tokiki17/dsh-semantic-search.git"
+  },
+  "homepage": "https://github.com/Tokiki17/dsh-semantic-search#readme",
+  "bugs": {
+    "url": "https://github.com/Tokiki17/dsh-semantic-search/issues"
   },
   "keywords": [
     "deepseek-harness",
     "dsh",
+    "dsh-plugin",
     "rag",
-    "qwen",
+    "semantic-search",
     "embedding",
     "rerank",
+    "qwen",
+    "llama.cpp",
     "knowledge-base"
   ],
   "scripts": {
@@ -82,6 +90,7 @@
     "jszip": "3.10.2",
     "mammoth": "1.13.0",
     "typescript": "5.9.3",
-    "unpdf": "2.1.0"
+    "unpdf": "2.1.0",
+    "zod": "4.4.3"
   }
 }

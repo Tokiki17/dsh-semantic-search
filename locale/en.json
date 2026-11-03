@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Qwen RAG knowledge base",
-    "description": "Hybrid semantic + keyword search over your workspace and document folders with Qwen embedding and rerank models, on Alibaba Cloud Model Studio or a local llama-server."
+    "title": "Semantic Search",
+    "description": "Search your workspace and document folders by meaning and keywords, with citations. Works out of the box with keyword search; add an embedding and rerank model (local, Alibaba Cloud Model Studio, SiliconFlow or any OpenAI-compatible service) for semantic search."
   }
 }

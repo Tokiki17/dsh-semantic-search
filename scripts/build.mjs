@@ -1,5 +1,5 @@
 // Bundle src/ into lib/ as ESM. DSH packages stay external (the host provides
-// them through peer resolution); unpdf, mammoth and ignore are bundled so the
+// them through peer resolution); unpdf, mammoth, ignore and zod are bundled so the
 // installed package has no runtime dependencies and no install scripts.
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -7,7 +7,7 @@ import { build } from 'esbuild'
 
 rmSync(new URL('../lib', import.meta.url), { recursive: true, force: true })
 const result = await build({
-  entryPoints: ['src/index.ts'],
+  entryPoints: ['src/index.ts', 'src/typert.ts'],
   outdir: 'lib',
   bundle: true,
   splitting: true,
@@ -18,7 +18,7 @@ const result = await build({
   chunkNames: 'chunks/[name]-[hash]',
   legalComments: 'none',
   metafile: true,
-  banner: { js: "import { createRequire as __qwenRagCreateRequire } from 'node:module'; const require = __qwenRagCreateRequire(import.meta.url);" },
+  banner: { js: "import { createRequire as __semanticSearchCreateRequire } from 'node:module'; const require = __semanticSearchCreateRequire(import.meta.url);" },
   logLevel: 'warning',
 })
 const outputs = Object.entries(result.metafile.outputs).filter(([file]) => file.endsWith('.js'))

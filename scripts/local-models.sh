@@ -1,6 +1,6 @@
 #!/bin/sh
 # Run Qwen3 embedding + rerank models locally with llama.cpp's llama-server,
-# matching the qwen-rag `openaiCompatible.preset: local` defaults.
+# matching the semantic-search plugin's local model defaults. Development only: the plugin downloads and runs its own servers.
 #
 #   scripts/local-models.sh download   fetch the GGUF files (skips existing ones)
 #   scripts/local-models.sh start      download if needed, then start both servers

@@ -4,20 +4,23 @@
  * pre-execute gate that asks before document text is uploaded to a remote
  * embedding service.
  */
+import { existsSync, renameSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { defineTool, type PreToolDecision, type ToolExecution } from '@deepseek-ai/dsh-tools'
-import { createDashScopeBackend } from './backends/dashscope.ts'
-import { createOpenAICompatibleBackend } from './backends/openai-compat.ts'
+import { createBackend } from './backends/index.ts'
 import type { Backend } from './backends/types.ts'
-import { assertCredentialName, Config, resolveOpenAICompatible } from './config.ts'
+import { assertCredentialName, Config, resolveModels } from './config.ts'
 import type { IndexStats } from './indexer.ts'
 import { KnowledgeBase, WORKSPACE, resolvePath, type CollectionInfo, type SearchResult } from './kb.ts'
+import { LocalManager } from './local/index.ts'
+import { createService, SERVICE_KEY } from './service.ts'
+import { TYPERT } from './typert.ts'
 
 export { Config }
-export const name = 'qwen-rag'
+export const name = 'semantic-search'
 export const inject = ['tools', 'systemPrompt']
 
 const TOOL_SEARCH = 'knowledge_search'
@@ -26,11 +29,15 @@ const TOOL_STATUS = 'knowledge_status'
 const TOOL_REMOVE = 'knowledge_remove'
 
 const PROMPT = [
-  'Knowledge base: `knowledge_search` runs hybrid semantic + keyword search (Qwen embedding and rerank) over the indexed current workspace and named document collections.',
+  'Knowledge base: `knowledge_search` runs hybrid semantic + keyword search over the indexed current workspace and named document collections.',
   'Before answering questions about this project\'s code or docs, or about documents the user has added to a collection, search first and cite passages as path:line (or path p.N for PDFs).',
   'If the workspace is not indexed yet, offer to index it with `knowledge_index`; use `knowledge_status` to list collections.',
 ].join(' ')
 
+interface TypertRegistry {
+  getPackage(name: string, face: string): unknown
+  register(manifest: unknown): unknown
+}
 interface Credentials {
   resolve(ref: string): Promise<{ value: string } | undefined>
 }
@@ -64,55 +71,51 @@ export function apply(ctx: Context, config: Config): void {
     return hit?.value || process.env[env] || undefined
   }
 
+  const storageDir = config.storageDir ? resolvePath(config.storageDir, homedir()) : defaultStorageDir(resolveDshHome())
+  // Nothing is downloaded or started until a local model is requested.
+  const local = new LocalManager({
+    dir: storageDir,
+    ctx: config.local.ctx,
+    idleStopMinutes: config.local.idleStopMinutes,
+    downloadSource: config.local.downloadSource,
+    githubMirror: config.local.githubMirror || undefined,
+  })
+  ctx.effect(() => () => local.dispose(), 'semantic-search local models')
+
   let cachedBackend: Backend | undefined
   const backend = (): Backend => {
-    if (cachedBackend !== undefined) return cachedBackend
-    const rerankInstruct = config.rerankInstruct || undefined
-    if (config.backend === 'dashscope') {
-      const d = config.dashscope
-      cachedBackend = createDashScopeBackend({
-        baseURL: d.baseURL,
-        apiKey: apiKey(d.apiKeyEnv),
-        apiKeyEnv: d.apiKeyEnv,
-        embeddingModel: d.embeddingModel,
-        rerankModel: d.rerankModel || undefined,
-        dimensions: d.dimensions,
-        batchSize: d.batchSize,
-        queryInstruct: config.queryInstruct,
-        rerankInstruct,
-        timeoutMs: config.requestTimeoutMs,
-      })
-    } else {
-      const o = resolveOpenAICompatible(config.openaiCompatible)
-      cachedBackend = createOpenAICompatibleBackend({
-        name: config.openaiCompatible.preset === 'local' ? 'llama-server' : config.openaiCompatible.preset,
-        embeddingBaseURL: o.embeddingBaseURL,
-        rerankBaseURL: o.rerankBaseURL,
-        apiKey: apiKey(o.apiKeyEnv),
-        apiKeyEnv: o.apiKeyEnv,
-        embeddingModel: o.embeddingModel,
-        rerankModel: o.rerankModel,
-        dimensions: o.dimensions,
-        sendDimensions: o.sendDimensions,
-        batchSize: o.batchSize,
-        queryFormat: o.queryFormat,
-        queryInstruct: config.queryInstruct,
-        rerankInstruct,
-        timeoutMs: config.requestTimeoutMs,
-      })
-    }
+    cachedBackend ??= createBackend(resolveModels(config), {
+      apiKey,
+      local: local.servers,
+      queryInstruct: config.queryInstruct,
+      rerankInstruct: config.rerankInstruct || undefined,
+      timeoutMs: config.requestTimeoutMs,
+    })
     return cachedBackend
   }
 
-  const storageDir = config.storageDir ? resolvePath(config.storageDir, homedir()) : join(resolveDshHome(), 'qwen-rag')
-  const kb = new KnowledgeBase({
+  const kb = new KnowledgeBase({ storageDir, backend, index: config.index, search: config.search })
+  ctx.effect(() => () => kb.close(), 'semantic-search stores')
+
+  // Setup page RPC (`semanticSearch/*`); the ./typert manifest is normally registered by dsh-typert-loader.
+  const setup = createService({
+    config,
     storageDir,
+    kb,
+    local,
     backend,
-    index: config.index,
-    search: config.search,
-    rerank: config.rerank,
+    backendDeps: { apiKey, queryInstruct: config.queryInstruct, rerankInstruct: config.rerankInstruct || undefined, timeoutMs: config.requestTimeoutMs },
+    optional,
+    describeBackend,
   })
-  ctx.effect(() => () => kb.close(), 'qwen-rag stores')
+  ctx.effect(() => () => setup.dispose(), 'semantic-search setup')
+  ;(ctx as unknown as { provide(name: string, value: unknown): void }).provide(SERVICE_KEY, setup.service)
+  ;(ctx as unknown as { inject(deps: string[], body: (inner: { typert: TypertRegistry }) => void): void }).inject(['typert'], (inner) => {
+    // Hot installs from a file: entry are outside the loader's package scan, so register the manifest here.
+    const entry = (ctx as unknown as { fiber?: { entry?: { options: { name?: string } } } }).fiber?.entry
+    if (inner.typert.getPackage(TYPERT.package, 'host') || (entry !== undefined && !entry.options.name?.startsWith('file:'))) return
+    inner.typert.register(TYPERT)
+  })
 
   const cwdOf = async (exec: { agent?: ToolExecution['agent']; signal: AbortSignal }): Promise<string> => {
     const workingDirectory = optional<WorkingDirectory>('workingDirectory')
@@ -120,37 +123,50 @@ export function apply(ctx: Context, config: Config): void {
     return process.cwd()
   }
 
-  ctx.systemPrompt.section({ name: 'tool:qwen-rag', order: 9000, text: PROMPT })
+  ctx.systemPrompt.section({ name: 'tool:semantic-search', order: 9000, text: PROMPT })
 
   // Ask before knowledge_index sends document text off this machine.
   ctx.on('tools/pre-execute', async (exec: ToolExecution, next: () => Promise<PreToolDecision>): Promise<PreToolDecision> => {
     const decision = await next()
     if (decision.kind !== 'allow' || exec.name !== TOOL_INDEX || config.approval === 'never') return decision
-    let remote: boolean
-    let endpoint: string
+    let remote = false
+    let endpoint = ''
     try {
       const { embedder } = backend()
-      remote = embedder.remote
-      endpoint = embedder.endpoint
+      remote = embedder?.remote ?? false
+      endpoint = embedder?.endpoint ?? ''
     } catch {
       return decision
     }
     if (config.approval === 'remote' && !remote) return decision
     const mode = optional<SandboxPolicy>('sandboxPolicy')?.resolve({ session: (exec.agent as { session?: unknown } | undefined)?.session }).mode
     if (mode === 'danger-full-access') return decision
-    const target = (exec.arguments as { target?: unknown } | undefined)?.target
-    const what = typeof target === 'string' ? target : 'the requested files'
+    const args = (exec.arguments ?? {}) as { target?: unknown; paths?: unknown; rebuild?: unknown }
+    const what = typeof args.target === 'string' ? args.target : 'the requested files'
+    // Rough size of what would be uploaded: ~3.5 UTF-8 bytes per token across mixed Chinese and English text.
+    let size = { en: '', zh: '' }
+    if (remote && typeof args.target === 'string') {
+      try {
+        const paths = Array.isArray(args.paths) ? args.paths.filter((path): path is string => typeof path === 'string') : undefined
+        const plan = kb.planIndex(args.target, paths, await cwdOf(exec))
+        const { files, bytes } = await kb.estimate(plan, args.rebuild === true, exec.signal)
+        const tokens = formatTokens(bytes / 3.5)
+        size = { en: ` About ${files} files, roughly ${tokens} tokens, billed by the provider.`, zh: `约 ${files} 个文件、${tokens} token，按服务商价格计费。` }
+      } catch {
+        // The tool itself reports invalid targets; the prompt just goes without an estimate.
+      }
+    }
     return {
       kind: 'ask',
       reason: remote
-        ? `knowledge_index will upload the text of "${what}" to ${endpoint} to compute embeddings.`
+        ? `knowledge_index will upload the text of "${what}" to ${endpoint} to compute embeddings.${size.en}`
         : `knowledge_index will read and index "${what}".`,
       displayReason: {
         en: remote
-          ? `Index "${what}" by sending its text to ${endpoint} for embedding?`
+          ? `Index "${what}" by sending its text to ${endpoint} for embedding?${size.en}`
           : `Index "${what}" into the local knowledge base?`,
         zh: remote
-          ? `要索引「${what}」吗？文件内容会发送到 ${endpoint} 计算向量。`
+          ? `要索引「${what}」吗？文件内容会发送到 ${endpoint} 计算向量。${size.zh}`
           : `要把「${what}」索引进本地知识库吗？`,
       },
     }
@@ -159,7 +175,7 @@ export function apply(ctx: Context, config: Config): void {
   ctx.tools.register(defineTool({
     name: TOOL_SEARCH,
     description:
-      'Search the knowledge base (current workspace index plus named document collections) with hybrid semantic + keyword retrieval and Qwen reranking. Returns cited passages (path:line or path p.N).',
+      'Search the knowledge base (current workspace index plus named document collections) with hybrid semantic + keyword retrieval and reranking. Returns cited passages (path:line or path p.N).',
     parameters: {
       query: { type: 'string', required: true, description: 'Natural-language question or keywords, in any language.' },
       collections: {
@@ -243,6 +259,7 @@ export function apply(ctx: Context, config: Config): void {
           ...(progress !== undefined ? { progress } : {}),
         })
       const label = plan.ref.kind === 'workspace' ? `workspace ${plan.ref.root}` : `collection "${plan.ref.name}"`
+      const keywordOnly = backend().embedder === undefined
 
       const jobs = optional<Jobs>('jobs')
       if (args.background !== false && jobs !== undefined && exec.agent !== undefined) {
@@ -255,7 +272,7 @@ export function apply(ctx: Context, config: Config): void {
             run(job) {
               const controller = new AbortController()
               const done = run(controller.signal, (line) => job.updateProgress(line)).then(
-                (stats) => ({ status: 'completed' as const, detail: summary(stats), result: renderIndex(label, stats) }),
+                (stats) => ({ status: 'completed' as const, detail: summary(stats), result: renderIndex(label, stats, keywordOnly) }),
                 (error: unknown) => controller.signal.aborted
                   ? { status: 'killed' as const }
                   : { status: 'failed' as const, detail: error instanceof Error ? error.message : String(error) },
@@ -266,10 +283,10 @@ export function apply(ctx: Context, config: Config): void {
           return `Indexing ${label} started in the background as job ${jobId}. You will be notified when it finishes; check progress with job_output or stop it with job_kill.`
         } catch (error) {
           // No job controller serves this agent: fall through to a foreground run.
-          ctx.logger?.debug?.(`qwen-rag: background job unavailable (${String(error)}), indexing in the foreground`)
+          ctx.logger?.debug?.(`semantic-search: background job unavailable (${String(error)}), indexing in the foreground`)
         }
       }
-      return renderIndex(label, await run(exec.signal))
+      return renderIndex(label, await run(exec.signal), keywordOnly)
     },
   }))
 
@@ -286,10 +303,9 @@ export function apply(ctx: Context, config: Config): void {
       const cwd = await cwdOf(exec)
       let active: string
       try {
-        const current = backend()
-        active = `${current.embedder.id} at ${current.embedder.endpoint}${current.reranker && config.rerank ? `; rerank ${current.reranker.id}` : '; rerank off'}`
+        active = describeBackend(backend())
       } catch (error) {
-        active = `misconfigured (${error instanceof Error ? error.message : String(error)})`
+        active = `misconfigured (${error instanceof Error ? error.message : String(error)}); fix it in Plugins → Semantic Search → Configure`
       }
       return renderStatus(kb.list(cwd), active, storageDir)
     },
@@ -315,12 +331,41 @@ export function apply(ctx: Context, config: Config): void {
   }))
 }
 
+/** Pick `<home>/semantic-search`, moving a 0.1.x `<home>/qwen-rag` store there on first start. */
+export function defaultStorageDir(home: string): string {
+  const dir = join(home, 'semantic-search')
+  const legacy = join(home, 'qwen-rag')
+  if (!existsSync(dir) && existsSync(legacy)) {
+    try {
+      renameSync(legacy, dir)
+    } catch {
+      return legacy
+    }
+  }
+  return dir
+}
+
+function formatTokens(tokens: number): string {
+  if (tokens >= 1e6) return `${(tokens / 1e6).toFixed(1)}M`
+  if (tokens >= 1e3) return `${Math.round(tokens / 1e3)}k`
+  return String(Math.max(1, Math.round(tokens)))
+}
+
+function describeBackend(backend: Backend): string {
+  const embedding = backend.embedder === undefined
+    ? 'keyword search only (no embedding model; configure one in Plugins → Semantic Search → Configure for semantic search)'
+    : `embedding ${backend.embedder.id} at ${backend.embedder.endpoint}`
+  const rerank = backend.reranker === undefined ? 'rerank off' : `rerank ${backend.reranker.id} at ${backend.reranker.endpoint}`
+  return `${embedding}; ${rerank}`
+}
+
 function renderSearch(query: string, result: SearchResult): string {
   const lines: string[] = []
   if (result.hits.length === 0) {
     lines.push(`No passages found for ${JSON.stringify(query)}.`)
   } else {
-    lines.push(`${result.hits.length} passages for ${JSON.stringify(query)} (${result.ranking === 'rerank' ? 'reranked' : 'hybrid fusion order'}; searched: ${result.searched.join(', ')}):`)
+    const order = result.ranking === 'rerank' ? 'reranked' : result.ranking === 'fusion' ? 'hybrid fusion order' : 'keyword match order'
+    lines.push(`${result.hits.length} passages for ${JSON.stringify(query)} (${order}; searched: ${result.searched.join(', ')}):`)
     result.hits.forEach((hit, index) => {
       const where = hit.location.startsWith('p.') ? `${hit.path} ${hit.location}` : `${hit.path}:${hit.location}`
       lines.push('', `[${index + 1}] ${where} · ${hit.collection}${hit.heading ? ` · § ${hit.heading}` : ''} · score ${hit.score}`, hit.text)
@@ -334,15 +379,16 @@ function summary(stats: IndexStats): string {
   return `${stats.added} added, ${stats.updated} updated, ${stats.removed} removed, ${stats.chunks} chunks`
 }
 
-function renderIndex(label: string, stats: IndexStats): string {
+function renderIndex(label: string, stats: IndexStats, keywordOnly: boolean): string {
   const lines = [
     `Indexed ${label} in ${(stats.ms / 1000).toFixed(1)} s: ${stats.scanned} files scanned, ${stats.added} added, ${stats.updated} updated, ` +
-      `${stats.unchanged} unchanged, ${stats.removed} removed, ${stats.skipped} skipped; ${stats.chunks} chunks embedded.`,
+      `${stats.unchanged} unchanged, ${stats.removed} removed, ${stats.skipped} skipped; ${stats.chunks} chunks ${keywordOnly ? 'stored for keyword search' : 'embedded'}.`,
   ]
   if (stats.oversized > 0) lines.push(`${stats.oversized} files exceeded index.maxFileBytes and were skipped.`)
   if (stats.truncated) lines.push('Stopped at index.maxFiles; some files were not indexed and deletions were not pruned.')
   if (stats.missing.length > 0) lines.push(`Missing sources: ${stats.missing.join(', ')}`)
   if (stats.errors.length > 0) lines.push('Errors:', ...stats.errors.map((error) => `- ${error}`))
+  if (keywordOnly) lines.push('No embedding model is configured, so search matches keywords only. For semantic search, set up models in Plugins → Semantic Search → Configure, then rebuild.')
   return lines.join('\n')
 }
 
@@ -356,7 +402,7 @@ function renderStatus(infos: CollectionInfo[], active: string, storageDir: strin
     const where = info.kind === 'workspace' ? info.root ?? '' : info.sources.join(', ')
     lines.push(
       `- ${info.name}${info.current ? ' (current workspace)' : ''}: ${info.files} files, ${info.chunks} chunks` +
-        `${info.stale ? ', STALE (embedding model changed; rebuild)' : ''}; updated ${info.updatedAt ?? 'never'}; ${where}` +
+        `${info.stale ? ', STALE (embedding model changed; rebuild for semantic search)' : ''}; updated ${info.updatedAt ?? 'never'}; ${where}` +
         `${info.description ? `; ${info.description}` : ''}`,
     )
   }

@@ -8,8 +8,9 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { createOpenAICompatibleBackend } from '../src/backends/openai-compat.ts'
-import { DEFAULT_EXCLUDE_DIRS, DEFAULT_QUERY_INSTRUCT, resolveOpenAICompatible } from '../src/config.ts'
+import z from '@deepseek-ai/schemastery'
+import { createBackend } from '../src/backends/index.ts'
+import { Config, DEFAULT_EXCLUDE_DIRS, DEFAULT_QUERY_INSTRUCT, resolveModels } from '../src/config.ts'
 import { KnowledgeBase } from '../src/kb.ts'
 
 const [folder, storageDir, ...queries] = process.argv.slice(2)
@@ -18,11 +19,11 @@ if (!folder || !storageDir) {
   process.exit(2)
 }
 
-const preset = resolveOpenAICompatible({ preset: 'local' })
-const backend = createOpenAICompatibleBackend({
-  name: 'llama-server',
-  ...preset,
-  apiKey: async () => undefined,
+// The servers started by scripts/local-models.sh stand in for the plugin's own local model manager.
+const config = new (Config as unknown as z<Config>)({ embedding: { source: 'local' } } as Config)
+const backend = createBackend(resolveModels(config), {
+  apiKey: () => async () => undefined,
+  local: { baseURL: async (role) => `http://127.0.0.1:${role === 'embedding' ? 8081 : 8082}/v1` },
   queryInstruct: DEFAULT_QUERY_INSTRUCT,
   rerankInstruct: undefined,
   timeoutMs: 120000,
@@ -32,7 +33,6 @@ const kb = new KnowledgeBase({
   backend: () => backend,
   index: { chunkChars: 1200, overlapChars: 150, maxFileBytes: 20 << 20, maxFiles: 20000, excludeDirs: DEFAULT_EXCLUDE_DIRS, extraExtensions: [] },
   search: { topK: 5, candidates: 50, rerankCandidates: 30, maxSnippetChars: 160, refreshBeforeSearch: false, maxRefreshFiles: 50 },
-  rerank: true,
 })
 
 const rss = (): string => {
