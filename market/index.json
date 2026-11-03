@@ -1,0 +1,55 @@
+{
+  "format": 1,
+  "title": {
+    "en": "Tokiki DSH plugins",
+    "zh": "Tokiki 的 DSH 插件"
+  },
+  "description": {
+    "en": "Community plugins for DeepSeek Harness.",
+    "zh": "DeepSeek Harness 社区插件。"
+  },
+  "plugins": [
+    {
+      "name": "@tokiki/dsh-qwen-rag",
+      "title": {
+        "en": "Qwen RAG knowledge base",
+        "zh": "Qwen RAG 知识库"
+      },
+      "description": {
+        "en": "Hybrid semantic + keyword search over your workspace and document folders with Qwen embedding and rerank models, on Alibaba Cloud Model Studio or a local llama-server.",
+        "zh": "用 Qwen 向量与重排模型对工作区和文档文件夹做语义 + 关键词混合检索，可选阿里云百炼或本地 llama-server。"
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIHZpZXdCb3g9IjAgMCAzNiAzNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB4PSI3IiB5PSI2IiB3aWR0aD0iMTYiIGhlaWdodD0iMjEiIHJ4PSIyLjUiIHN0cm9rZT0idXJsKCNxd2VuLXJhZy1ib29rKSIgc3Ryb2tlLXdpZHRoPSIzIi8+CiAgPHBhdGggZD0iTTExLjUgMTJoN00xMS41IDE2LjVoNSIgc3Ryb2tlPSIjN0I2MUZGIiBzdHJva2Utd2lkdGg9IjIuNCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CiAgPGNpcmNsZSBjeD0iMjQuNSIgY3k9IjIzLjUiIHI9IjUiIHN0cm9rZT0iIzY1OEVGRiIgc3Ryb2tlLXdpZHRoPSIzIiBmaWxsPSIjZmZmIi8+CiAgPHBhdGggZD0iTTI4LjIgMjcuMiAzMSAzMCIgc3Ryb2tlPSIjNjU4RUZGIiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDxkZWZzPgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJxd2VuLXJhZy1ib29rIiB4MT0iNyIgeTE9IjYiIHgyPSIyMyIgeTI9IjI3IiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+CiAgICAgIDxzdG9wIHN0b3AtY29sb3I9IiM3QjYxRkYiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjNjU4RUZGIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogIDwvZGVmcz4KPC9zdmc+Cg==",
+      "author": "Tokiki",
+      "homepage": "https://github.com/Tokiki17/dsh-qwen-rag",
+      "repository": {
+        "url": "https://github.com/Tokiki17/dsh-qwen-rag"
+      },
+      "metadata": {
+        "keywords": [
+          "deepseek-harness",
+          "dsh",
+          "rag",
+          "qwen",
+          "embedding",
+          "rerank",
+          "knowledge-base"
+        ]
+      },
+      "versions": [
+        {
+          "version": "0.1.0",
+          "publishTimestamp": 1793689717,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/Tokiki17/dsh-qwen-rag",
+            "commit": "957690abfe8383755040bf159bc661fcdb8248f4"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0"
+          }
+        }
+      ]
+    }
+  ]
+}
