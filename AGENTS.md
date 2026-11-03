@@ -6,6 +6,7 @@ A DeepSeek Harness (DSH) plugin bundle, "Semantic Search" (`@tokiki/dsh-semantic
 
 - `src/` host plugin (`lib/index.js`); `src/local/` llama.cpp runtime, model downloads and llama-server processes; `src/service.ts` + `src/typert.ts` the `semanticSearch` RPC for the setup page (`lib/typert.js`).
 - `src/client/` browser half (`lib/client.js`, React from the host), type-checked by its own `src/client/tsconfig.json`.
+- `src/enforce.ts` search steering: the routing rule sent as agent instructions (`search.instructions`) and optional enforcement (`search.enforce`); `eval/` the retrieval evaluation (question set, search daemon, MCP shim, runner, scorer, results in `eval/README.md`), not shipped.
 
 ## Commands
 
@@ -16,6 +17,7 @@ PLUGIN_ENTRY=lib/index.js node --test test/plugin.test.ts   # same integration t
 scripts/local-models.sh start|stop|status            # dev-only llama-server on :8081/:8082 for the benchmark
 node scripts/bench-local.ts <folder> <tmp-store> "query"      # local backend benchmark
 node scripts/market-index.mjs <release-commit>       # regenerate and validate market/index.json
+node eval/run.ts <repo> eval/runs/<name> --harness codex|claude|dsh   # retrieval evaluation; see eval/README.md
 ```
 
 ## Rules that the code does not show

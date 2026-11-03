@@ -88,6 +88,12 @@ All five test queries returned the matching section first when rerank was on. Fu
 | `knowledge_status` | List collections, their counts, embedding model, staleness, and the active models |
 | `knowledge_remove` | Delete a collection's index, or only some files from it |
 
+The plugin's system prompt tells the model to search first for questions about documents and for paraphrased wording, and to use file search for code. Measured in DSH with `deepseek-flash` ([eval/README.md](eval/README.md)):
+- From the prompt alone, the model rarely called `knowledge_search`.
+- Forcing the call (`search.enforce: docs`) or attaching hits (`prefetch`) did not help, so `search.enforce` is off by default.
+- What helped was the routing rule delivered as agent instructions. `search.instructions` (on by default, active once a semantic index exists) sends it the way DSH sends AGENTS.md. Doc-fact questions then took about 0.78× the time, paraphrased ones about 0.75× the tokens, and code questions were unchanged within noise.
+- The same rule written in the project's or the user's `AGENTS.md` did slightly better. The rule text is in the Chinese README.
+
 ## Privacy
 
 - The plugin never reads secrets (`.env*`, keys, `credentials`/`secrets` files), lockfiles, or binaries.

@@ -4,8 +4,11 @@ title: Verification status
 description: What has been verified for 0.2.0 (and earlier for 0.1.0), how, and what is still pending.
 generated:
   by: process:doc-sync
-  at: 2026-11-03T17:11:17+08:00
+  at: 2026-11-03T21:30:00+08:00
 sources:
+  - id: eval
+    resource: ../../eval/README.md
+    title: Retrieval evaluation
   - id: tests
     resource: ../../test/
     title: node --test suite
@@ -25,6 +28,19 @@ State as of 2026-11-03, DSH 0.2.1-rc.5.
 - In a throwaway `DSH_HOME` running `dsh web` from a packed tarball: the client module starts, the setup page renders on the bundle page, and two flows completed in the browser: a custom online service (a local fake server requiring a test key; key stored only in the credential file, connection tests passed, patch written) and local embedding with rerank off (runtime downloaded from the page, local test started llama-server inside DSH, saved, no server left after the reload).
 - A throwaway headless profile still composes with the plugin installed.
 
+## Retrieval evaluation (unreleased working tree)
+
+On 2026-11-03, 20 questions over the RogueReborn repository were run against Codex (200 runs) and DSH with `deepseek-flash` (260 runs); every answer was correct in every configuration. Measured from the time and token use:[^eval]
+- Without instructions the tool is rarely used.
+- With 4 runs per question in DSH, a routing rule in `AGENTS.md` gives a Pareto gain on doc-fact questions in DSH: per question 0.74× time and 0.71× tokens.
+- Paraphrased questions break even.
+- Code questions cost 19–54% more tokens when routed to search.
+- Rerank adds about 3 s per search with no accuracy gain on these questions.
+- `search.enforce: docs` and `prefetch` were not better than no steering.
+- The rule sent by the plugin through `search.instructions` captured most of the `AGENTS.md` gain: doc facts at 0.78× time, paraphrased questions at 0.75× tokens, code questions within noise.
+
+Not covered: Claude Code (its CLI was not logged in on this machine), harder questions, other repositories, and DSH models other than `deepseek-flash`.
+
 ## Verified for 0.1.0 (historical)
 
 - Published at https://github.com/Tokiki17/dsh-qwen-rag (tag `v0.1.0`, commit `957690a`); the raw market index passed DSH's `parseMarketIndex`, and GitHub installs composed in a throwaway profile.
@@ -40,3 +56,4 @@ State as of 2026-11-03, DSH 0.2.1-rc.5.
 
 [^tests]: node --test suite
 [^bench]: Chinese README, local benchmark section
+[^eval]: Retrieval evaluation

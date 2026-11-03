@@ -61,8 +61,14 @@ export interface Config {
     refreshBeforeSearch: boolean
     maxRefreshFiles: number
     timeoutMs: number
+    enforce: EnforceMode
+    prefetchTopK: number
+    instructions: boolean
   }
 }
+
+/** How strongly the plugin steers document searches to knowledge_search (see src/enforce.ts). */
+export type EnforceMode = 'off' | 'remind' | 'docs' | 'prefetch'
 
 export const DEFAULT_QUERY_INSTRUCT = 'Given a search query, retrieve relevant passages from documents and source code that answer the query'
 export const DEFAULT_EXCLUDE_DIRS = [
@@ -134,6 +140,10 @@ export const Config: z<Config> = z.object({
     refreshBeforeSearch: z.boolean().default(true),
     maxRefreshFiles: z.natural().default(50),
     timeoutMs: z.natural().min(1000).default(180000),
+    enforce: z.union(['off', 'remind', 'docs', 'prefetch'] as const).default('off')
+      .description('Steer document searches to knowledge_search: off; remind (note after a grep of the docs); docs (refuse the first grep of indexed docs in a turn, pointing to knowledge_search); prefetch (search each user message and attach document hits).'),
+    prefetchTopK: z.natural().min(1).max(20).default(5).description('Passages attached per user message in prefetch mode.'),
+    instructions: z.boolean().default(true).description('Deliver the docs-first routing rule as an agent-instructions message (like AGENTS.md) once per agent, when the workspace is indexed.'),
   }).default({}),
 }) as z<Config>
 

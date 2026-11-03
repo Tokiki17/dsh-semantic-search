@@ -4,8 +4,14 @@ title: Plugin architecture and retrieval pipeline
 description: How the semantic-search plugin registers tools, stores collections, answers a search and serves its setup page.
 generated:
   by: process:doc-sync
-  at: 2026-11-03T17:11:17+08:00
+  at: 2026-11-03T21:30:00+08:00
 sources:
+  - id: enforce
+    resource: ../../src/enforce.ts
+    title: Search steering (search.enforce)
+  - id: eval
+    resource: ../../eval/README.md
+    title: Retrieval evaluation
   - id: research
     resource: ../../docs/research.zh.md
     title: Research report, sections 1 and 6
@@ -36,6 +42,10 @@ A search runs dense recall (brute-force cosine over a cached Float32 matrix) and
 
 The setup page is the package's browser half (`./client`): it renders on the bundle's Plugins page through the `plugins.bundle.config` slot and calls the host `semanticSearch` service through the `./typert` manifest. That service reports state, tests a draft configuration with real requests, saves it with DSH's config editor (which hot-reloads the plugin), stores keys in DSH credentials, drives local model downloads, and rebuilds stale collections.[^service][^client]
 
+The system-prompt section routes questions about documents and paraphrased wording to `knowledge_search`, and code, identifiers and file names to file search. Models largely ignore that section, so the routing has two other paths:[^enforce][^eval]
+- `search.instructions` (default on, active once a semantic index exists) sends the same rule as an agent-instructions message, the way DSH sends AGENTS.md. It made doc questions faster and cheaper in the 2026-11-03 evaluation.
+- `search.enforce` (default `off`) has three modes: `remind`, `docs` (refuses the first doc grep of a turn) and `prefetch` (attaches doc hits to each message). None of them beat no steering.
+
 The design rationale and the comparison with MCP or skill-based integration are in the research report.[^research]
 
 [^entry]: Plugin entry
@@ -44,3 +54,5 @@ The design rationale and the comparison with MCP or skill-based integration are 
 [^service]: Setup service and typert manifest
 [^client]: Browser half
 [^research]: Research report, sections 1 and 6
+[^enforce]: Search steering (search.enforce)
+[^eval]: Retrieval evaluation

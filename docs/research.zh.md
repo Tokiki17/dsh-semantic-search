@@ -14,6 +14,7 @@ DSH 0.2.1-rc.5 的内置包和官方按需目录里都没有 embedding、向量�
 - 配置走插件页里的分步配置页（网页端 `./client` + 宿主 RPC `./typert`），Key 存 DSH 凭据库。
 - 存储：DSH 自带 Node 24 的 `node:sqlite`，不需要任何原生依赖。插件管理器底层的 pnpm 11 默认拦截构建脚本，零原生依赖正好避开这个问题。
 - 和 DSH 的集成：审批（`tools/pre-execute` 返回 `ask`）、凭据（`ctx.credentials`）、后台任务（`ctx.jobs`）、插件市场（git 源索引）都走 DSH 自己的链路。
+- 模型默认很少主动调用检索。实测有效的是通过 agent 指令通道下达路由规则：文档类问题先用 `knowledge_search`，代码问题照常用 grep。插件默认用 `search.instructions` 发送这条规则，也可以写进 AGENTS.md，效果更好。见第八节。
 
 ## 一、DSH 插件机制（与本插件相关的部分）
 
@@ -153,6 +154,15 @@ Qwen-Agent 的做法是：
 8. **只用关键词的模式**：没有向量模型时，片段照样切分并写入 FTS5，向量列为空，集合的 embedder 标识记为 `keyword-only`。之后加了向量模型，这些集合被标为过期，但仍按关键词检索并提示重建；反过来，用某个模型建的集合在模型不可比时也只走关键词检索，不会拿不同模型的向量比较。
 9. **配置页**：网页端在插件页的 `plugins.bundle.config` slot 里渲染三步配置页，通过 `ctx.remote.$mount` 挂载 `semanticSearch` 命名空间调用宿主服务（`src/service.ts`，清单在 `src/typert.ts`）。保存走 DSH 的 `configEditor.edit`，写进 profile 的 `cordis.patch.yml` 并热重载插件；Key 走 `credentials.set`，配置页只能写本插件引用的凭据名，或者一个还没被占用的新名字，不能覆盖其他插件的凭据。
 
+10. **引导模型使用**：系统提示词把文档类和换说法的问题路由到 `knowledge_search`，代码问题交给文件搜索。`search.enforce` 另外提供三种可选的强制方式，默认关闭（实测见第八节）：
+    - `remind`：模型 grep 文档后，用 `tools/post-execute` 附一条提醒；
+    - `docs`：每轮第一次 grep 已索引的文档时，用 `tools/pre-execute` 拒绝；
+    - `prefetch`：在 `agent/pre-step` 对每条用户消息检索，并附上文档命中。
+
+    插件做不到强制模型首选某个工具：DSH 没有把 `tool_choice` 这类设置开放给插件。
+
+    `search.instructions`（默认开启）在工作区有语义索引时，把路由规则以 agent 指令的形式发给每个 agent，做法和 DSH 发送 AGENTS.md 一样：一条用户角色的 `<system-reminder>` 消息，`form: instructions`。
+
 ## 七、已知限制
 
 - 向量检索是暴力扫描，向量常驻内存。例如 5 万个片段、1024 维约占 200 MB。更大的语料需要换 sqlite-vec 或 int8 量化，目前未实现。
@@ -161,6 +171,29 @@ Qwen-Agent 的做法是：
 - 网页端接口（slots、`remote.$mount`、`configEditor`、typert 清单）没有正式文档，是参照官方和社区插件写的，DSH 升级可能需要跟着调整，所以 `engines.dsh` 限定在 `<0.3.0`。
 - 本地模型只在 macOS（Apple M4）上实测过；Linux 和 Windows 的预编译包已接入但未实机验证。
 - 搜索前的自动刷新在云端后端下也会上传变化的文件内容。这个集合在首次建索引时已经批准过；如需关闭，设置 `search.refreshBeforeSearch: false`。
+
+## 八、评测：模型会不会用
+
+**方法**：2026-11-03 在 RogueReborn 仓库上做对比，题目、脚本和逐项数据见 [eval/README.md](../eval/README.md)。
+- 题目：20 道，四类各 5 道：精确定位、代码行为、文档事实、换说法。
+- Codex：每个配置每题跑 2 次，共 200 次。
+- DSH：`deepseek-flash`，共 260 次。
+
+所有配置都全部答对，所以只比较耗时和 token。
+
+**结论**：
+- **只靠工具描述或提示词，模型基本不调用。** Codex 把 MCP 工具放在延迟加载目录里，不说明就从不调用；DSH 里的 DeepSeek 看到插件的系统提示词，40 次里也只调用 1–3 次。
+- **用上了时，收益集中在文档事实类问题。**
+  - Codex：不计缓存的 token 少 34–46%。
+  - DSH：在 AGENTS.md 写一条路由规则后，每题平均耗时降到 0.74 倍（95% 置信区间 0.64–0.85），token 降到 0.71 倍（0.57–0.82），工具调用从 14 次降到 9 次，五道题都更快、更省，是帕累托改进。
+  - 换说法的问题持平。
+  - 代码问题会多花 19–54% 的 token。
+- **重排在这些题上不提高准确率。** 每次检索多约 3 秒，评测时都关掉了。
+- **从插件这一侧强制没有用。** 拒绝 grep（`docs`）或预先附上命中（`prefetch`）后，模型照样继续 grep，效果都不比不引导好，所以 `search.enforce` 默认关闭。
+- **同一句话放在哪里很关键。** 写在插件的系统提示段里没有效果，放进 agent 指令通道才有效：
+  - 写进 AGENTS.md（R）：四类题都持平或变好，文档事实类耗时 0.74 倍、token 0.71 倍。
+  - 由插件通过 instructions 通道注入（`search.instructions`，I）：文档事实类耗时 0.78 倍，换说法问题的 token 0.75 倍，代码问题在噪声范围内。所以 `search.instructions` 默认开启。
+- **已知局限**：这条规则每个 agent 只发一次，上下文压缩后不会重发；只在一个仓库、一个模型上测过。
 
 ## 来源
 

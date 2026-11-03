@@ -16,6 +16,7 @@ import { assertCredentialName, Config, resolveModels } from './config.ts'
 import type { IndexStats } from './indexer.ts'
 import { KnowledgeBase, WORKSPACE, resolvePath, type CollectionInfo, type SearchResult } from './kb.ts'
 import { LocalManager } from './local/index.ts'
+import { installEnforcement } from './enforce.ts'
 import { createService, SERVICE_KEY } from './service.ts'
 import { TYPERT } from './typert.ts'
 
@@ -30,7 +31,8 @@ const TOOL_REMOVE = 'knowledge_remove'
 
 const PROMPT = [
   'Knowledge base: `knowledge_search` runs hybrid semantic + keyword search over the indexed current workspace and named document collections.',
-  'Before answering questions about this project\'s code or docs, or about documents the user has added to a collection, search first and cite passages as path:line (or path p.N for PDFs).',
+  'Search it first for questions about documents (design notes, decisions, progress records, findings, measurements, and anything the user added to a collection) and for paraphrased or colloquial wording; read the cited path:line (or path p.N for PDFs) before relying on it.',
+  'For code, including behaviour described without names, and for exact identifiers, error text or file names, use the file search tools instead: they are exact and cheaper.',
   'If the workspace is not indexed yet, offer to index it with `knowledge_index`; use `knowledge_status` to list collections.',
 ].join(' ')
 
@@ -227,6 +229,28 @@ export function apply(ctx: Context, config: Config): void {
       return { ...result, hits: result.hits.map((hit) => ({ ...hit })) }
     },
   }))
+
+  // Steer document searches to knowledge_search (search.enforce); code searches are left alone.
+  installEnforcement(ctx, {
+    mode: config.search.enforce,
+    instructions: config.search.instructions,
+    searchTool: TOOL_SEARCH,
+    prefetchTopK: config.search.prefetchTopK,
+    async indexed(agent, signal) {
+      try {
+        if (backend().embedder === undefined) return false
+      } catch {
+        return false
+      }
+      const cwd = await cwdOf({ agent: agent as ToolExecution['agent'], signal })
+      return kb.list(cwd).some((info) => info.chunks > 0 && !info.stale && (info.current || info.kind !== 'workspace'))
+    },
+    async search(query, agent, topK, signal) {
+      const cwd = await cwdOf({ agent: agent as ToolExecution['agent'], signal })
+      return (await kb.search(query, { cwd, signal, topK })).hits
+    },
+    log: (line) => ctx.logger?.debug?.(line),
+  })
 
   ctx.tools.register(defineTool({
     name: TOOL_INDEX,

@@ -100,6 +100,8 @@ Key 按凭据名从 DSH 凭据库读取，找不到时再读环境变量或 `<DS
 | `search.topK` | 8 | 默认返回的片段数 |
 | `search.rerankCandidates` | 30 | 送去重排的候选数；本地模型嫌慢可以调到 15 |
 | `search.refreshBeforeSearch` / `search.maxRefreshFiles` | `true` / 50 | 搜索前自动增量刷新，变化的文件超过上限时只给提示 |
+| `search.enforce` | `off` | 是否引导模型用 `knowledge_search` 查文档：`remind` 在模型 grep 文档后提醒一次；`docs` 在每轮第一次 grep 已索引的文档时拒绝并指向 `knowledge_search`；`prefetch` 对每条用户消息先检索，把文档命中附给模型。实测都没有比不引导更好，见下文「让模型用起来」 |
+| `search.instructions` | `true` | 工作区有语义索引时，插件像 DSH 加载 AGENTS.md 那样，给每个 agent 发一条路由规则：文档和换说法的问题先用 `knowledge_search`，代码用 grep。实测能让文档类问题更快、更省 |
 
 完整配置见 [src/config.ts](src/config.ts)。
 
@@ -122,7 +124,21 @@ Key 按凭据名从 DSH 凭据库读取，找不到时再读环境变量或 `<DS
 | `knowledge_status({})` | 列出集合、文件数和片段数、所用模型、是否过期、最近更新时间，以及当前模型配置 |
 | `knowledge_remove({collection, paths?})` | 删除整个集合的索引，或其中部分文件的索引；不会动磁盘上的原文件 |
 
-插件还会在系统提示词里加一段静态说明：先检索再回答，并引用 `path:line`。没有配置向量模型时，工具照常工作，只按关键词检索，并在结果里提示去配置页设置模型。
+插件还会在系统提示词里加一段静态说明：文档类问题（设计、决策、进度记录、实测数据、已加入集合的资料）和换了说法的问题先用 `knowledge_search`，引用 `path:line`；代码和精确的标识符、报错原文、文件名用文件搜索。没有配置向量模型时，工具照常工作，只按关键词检索，并在结果里提示去配置页设置模型。
+
+### 让模型用起来
+
+在 DSH 里用 `deepseek-flash` 实测（RogueReborn 仓库，20 道题，每题跑 4 次，见 [eval/README.md](eval/README.md)）：
+
+- 只靠插件的系统提示词，模型几乎不调用 `knowledge_search`，40 次里只有 1–3 次。
+- 插件强制调用（`search.enforce: docs`）或预先附上命中（`prefetch`）都没有收益：模型搜完照样继续 grep。所以 `search.enforce` 默认关闭。
+- 有效的是把路由规则放进 agent 指令通道：
+  - 插件默认开启的 `search.instructions`：文档事实类问题耗时降到约 0.78 倍，换说法问题的 token 降到约 0.75 倍，代码问题基本不变。
+  - 把同一条规则写进项目的 `AGENTS.md` 或 `~/.agents/AGENTS.md`，效果更好：文档事实类问题耗时约 0.74 倍、token 约 0.71 倍，代码问题的 token 也少了约 20–28%。想要更好的效果，可以再加上这条：
+
+```markdown
+This workspace is indexed for semantic search. For any question about the docs (design decisions, progress notes, findings, measurements) or worded in a paraphrased or colloquial way, call `knowledge_search` first, then read the cited path:line to confirm. For exact identifiers, error text, file names and code behaviour, use grep and read directly.
+```
 
 示例对话：
 

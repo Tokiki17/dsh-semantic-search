@@ -1,0 +1,481 @@
+{
+  "repo": "RogueReborn",
+  "categories": {
+    "A": "代码精确定位：题目给出标识符或原文，grep 能直接命中",
+    "B": "代码概念：只描述行为，不给标识符",
+    "C": "文档事实：措辞接近文档原文",
+    "D": "改写与同义：口语化或换说法，原文里没有题目中的词"
+  },
+  "questions": [
+    {
+      "id": "A1",
+      "category": "A",
+      "question": "`roll_em` 定义在哪个文件，哪些函数调用了它？",
+      "files": [
+        "core/rogue-rules/src/fight.rs"
+      ],
+      "keypoints": [
+        [
+          "fight.rs"
+        ],
+        [
+          "fight"
+        ],
+        [
+          "attack"
+        ]
+      ],
+      "reference": "core/rogue-rules/src/fight.rs:426；调用者是同文件的 fight()（:120，玩家攻击）和 attack()（:211，怪物攻击）。"
+    },
+    {
+      "id": "A2",
+      "category": "A",
+      "question": "`lazy-function-tables` 这个特性在哪里开启，为什么要开？",
+      "files": [
+        "Cargo.toml"
+      ],
+      "keypoints": [
+        [
+          "Cargo.toml"
+        ],
+        [
+          "首次",
+          "第一次",
+          "first use",
+          "用到时",
+          "按需"
+        ],
+        [
+          "精简",
+          "导出模板",
+          "template"
+        ]
+      ],
+      "reference": "根 Cargo.toml:35–38 的 godot 依赖 features；引擎方法在首次使用时才查找，这样扩展能在去掉了很多模块的精简导出模板里初始化。"
+    },
+    {
+      "id": "A3",
+      "category": "A",
+      "question": "`RunConfig` 里的 `probe` 字段是做什么用的？",
+      "files": [
+        "core/rogue-session/src/lib.rs"
+      ],
+      "keypoints": [
+        [
+          "rogue-session"
+        ],
+        [
+          "测试",
+          "test"
+        ],
+        [
+          "正式",
+          "official",
+          "排行",
+          "M4",
+          "拒绝",
+          "refuse"
+        ]
+      ],
+      "reference": "core/rogue-session/src/lib.rs:343–347：仅测试用的开局探针，真实对局里没有；开局、读档、重放都接受它，正式记录（M4）必须拒绝带探针的对局。"
+    },
+    {
+      "id": "A4",
+      "category": "A",
+      "question": "提示「存档没有写成，这一局还在，可以再试一次。」在什么情况下出现？",
+      "files": [
+        "godot/game/main.gd"
+      ],
+      "keypoints": [
+        [
+          "main.gd"
+        ],
+        [
+          "seamless",
+          "无痕"
+        ],
+        [
+          "write_save",
+          "写",
+          "失败"
+        ]
+      ],
+      "reference": "godot/game/main.gd 的 _save_and_quit()：seamless（无痕）模式下 Store.write_save 返回 false 时显示，留在局内不退出。"
+    },
+    {
+      "id": "A5",
+      "category": "A",
+      "question": "`Layout.compute` 返回的字典里，`follow` 什么时候为 true？",
+      "files": [
+        "godot/game/layout.gd"
+      ],
+      "keypoints": [
+        [
+          "layout.gd"
+        ],
+        [
+          "_cells",
+          "min_cell",
+          "放不下",
+          "fit",
+          "装不下"
+        ]
+      ],
+      "reference": "godot/game/layout.gd 的 _cells()（:216–223）：整张地图按 min_cell 放不进可用区域时，地图格高取 min_cell，follow 为 true，地图跟随主角；放得下时为 false。"
+    },
+    {
+      "id": "B1",
+      "category": "B",
+      "question": "角色长时间不吃东西会依次发生什么？这段逻辑在哪？",
+      "files": [
+        "core/rogue-rules/src/daemon.rs"
+      ],
+      "keypoints": [
+        [
+          "daemon.rs"
+        ],
+        [
+          "stomach"
+        ],
+        [
+          "饿",
+          "hungry",
+          "weak",
+          "虚弱"
+        ],
+        [
+          "昏",
+          "faint",
+          "饿死",
+          "starv"
+        ]
+      ],
+      "reference": "core/rogue-rules/src/daemon.rs:180 stomach()：食物值降到 2×MORETIME 以下提示饿，MORETIME 以下变虚弱，≤0 后每回合 1/5 概率昏倒 4–11 回合，低于 -STARVETIME 饿死；戒指和护符影响消耗。"
+    },
+    {
+      "id": "B2",
+      "category": "B",
+      "question": "角色升级的时候，最大生命值是怎么增加的？",
+      "files": [
+        "core/rogue-rules/src/misc.rs"
+      ],
+      "keypoints": [
+        [
+          "misc.rs"
+        ],
+        [
+          "check_level"
+        ],
+        [
+          "roll",
+          "d10",
+          "10 面",
+          "掷"
+        ]
+      ],
+      "reference": "core/rogue-rules/src/misc.rs:247 check_level()：按经验查等级表，每升一级掷一个 d10（roll(升级数, 10)），同时加到最大生命和当前生命。"
+    },
+    {
+      "id": "B3",
+      "category": "B",
+      "question": "怪物追玩家的时候，是怎么决定下一步走哪一格的？",
+      "files": [
+        "core/rogue-rules/src/chase.rs"
+      ],
+      "keypoints": [
+        [
+          "chase.rs"
+        ],
+        [
+          "chase"
+        ],
+        [
+          "距离",
+          "dist",
+          "最近",
+          "closest"
+        ]
+      ],
+      "reference": "core/rogue-rules/src/chase.rs:304 chase()（由 do_chase/move_monst 调用）：在周围可走格中选离目标距离最近的一格；混乱怪、P、B 有概率随机走。"
+    },
+    {
+      "id": "B4",
+      "category": "B",
+      "question": "玩家踩到地上的机关之后，各种效果是在哪里处理的？",
+      "files": [
+        "core/rogue-rules/src/moves.rs"
+      ],
+      "keypoints": [
+        [
+          "moves.rs"
+        ],
+        [
+          "be_trapped"
+        ]
+      ],
+      "reference": "core/rogue-rules/src/moves.rs:228 be_trapped()：按陷阱类型处理（门、熊夹、睡眠、箭、传送、飞镖、锈蚀等），漂浮时不触发。"
+    },
+    {
+      "id": "B5",
+      "category": "B",
+      "question": "玩家直接关掉游戏窗口时，正在进行的这一局会怎样？",
+      "files": [
+        "godot/game/main.gd"
+      ],
+      "keypoints": [
+        [
+          "main.gd"
+        ],
+        [
+          "_suspend",
+          "WM_CLOSE",
+          "close"
+        ],
+        [
+          "保存",
+          "存",
+          "save"
+        ]
+      ],
+      "reference": "godot/game/main.gd 的 _notification 收到 NOTIFICATION_WM_CLOSE_REQUEST 调 _suspend()：局未结束时把会话写成 \"session\" 存档（带壳状态），下次原样继续，然后退出。"
+    },
+    {
+      "id": "C1",
+      "category": "C",
+      "question": "规则核心为什么选 Rust？如果某个平台走不通，退路是什么？",
+      "files": [
+        "docs/decisions/0001-core-language-rust.md"
+      ],
+      "keypoints": [
+        [
+          "0001"
+        ],
+        [
+          "引擎",
+          "engine",
+          "服务器",
+          "共用"
+        ],
+        [
+          "C ABI",
+          "cbindgen",
+          "godot-cpp"
+        ]
+      ],
+      "reference": "docs/decisions/0001-core-language-rust.md：核心要不依赖引擎，在无界面测试、服务器和 Godot 客户端之间共用；退路是 cbindgen 导出 C ABI + godot-cpp 包装，再退到 Rust 原生壳。"
+    },
+    {
+      "id": "C2",
+      "category": "C",
+      "question": "原作里「魔杖光束不伤怪物」这个缺陷是怎么回事，项目最后怎么处理的？",
+      "files": [
+        "docs/m1-progress.md"
+      ],
+      "keypoints": [
+        [
+          "m1-progress"
+        ],
+        [
+          "bolt",
+          "未初始化",
+          "残留",
+          "栈"
+        ],
+        [
+          "D12"
+        ]
+      ],
+      "reference": "docs/m1-progress.md:90：fire_bolt() 的局部 bolt 只设了部分字段，其余是栈上残留，伤害串为空，roll_em 不掷骰；门禁 3 按实测复刻，后经 D12 批准按原意修复（oracle 同样打补丁对拍）。"
+    },
+    {
+      "id": "C3",
+      "category": "C",
+      "question": "核心耗时实测里，一次 Seamless 存档要多久、存档有多大？一次按键呢？",
+      "files": [
+        "docs/m3-progress.md"
+      ],
+      "keypoints": [
+        [
+          "m3-progress"
+        ],
+        [
+          "0.75"
+        ],
+        [
+          "716"
+        ],
+        [
+          "56"
+        ]
+      ],
+      "reference": "docs/m3-progress.md「核心耗时实测与观察缓存」：Seamless 存档 0.75 ms、716 KB；一次按键 56 µs；observe 39 µs。"
+    },
+    {
+      "id": "C4",
+      "category": "C",
+      "question": "无痕恢复和经典读档两种模式下，局内按 S 的行为有什么不同？",
+      "files": [
+        "docs/m2-progress.md"
+      ],
+      "keypoints": [
+        [
+          "m2-progress"
+        ],
+        [
+          "save_at_checkpoint",
+          "命令边界",
+          "没按过"
+        ],
+        [
+          "结束",
+          "Restore(Classic)",
+          "原作"
+        ]
+      ],
+      "reference": "docs/m2-progress.md「存读档语义」：无痕恢复存 S 之前那个命令边界（save_at_checkpoint），继续时像没按过；经典读档按原作流程，存档后这一局结束，继续时按原作读档并在回放记 Restore(Classic)。"
+    },
+    {
+      "id": "C5",
+      "category": "C",
+      "question": "像 Dota 2 modifier 那样的状态组合系统，项目打算什么时候做？",
+      "files": [
+        "docs/decisions/0003-abstraction-timing.md"
+      ],
+      "keypoints": [
+        [
+          "0003"
+        ],
+        [
+          "扩展规则集",
+          "第二种行为",
+          "立项"
+        ]
+      ],
+      "reference": "docs/decisions/0003-abstraction-timing.md：属于内部变化点，等第一个扩展规则集立项、出现第二种行为时再按真实内容设计；对外边界第一版就抽象。"
+    },
+    {
+      "id": "D1",
+      "category": "D",
+      "question": "游戏里那个会把盔甲弄生锈的水怪，中文名叫什么？翻译表在哪维护？",
+      "files": [
+        "core/rogue-interact/src/text.rs"
+      ],
+      "keypoints": [
+        [
+          "锈水怪"
+        ],
+        [
+          "text.rs"
+        ]
+      ],
+      "reference": "aquator 译作「锈水怪」，在 core/rogue-interact/src/text.rs:19 的名字翻译表里。"
+    },
+    {
+      "id": "D2",
+      "category": "D",
+      "question": "在苹果手机上用拼音给东西起名字，会遇到什么坑？应该怎么取文本？",
+      "files": [
+        "docs/m0-validation.md"
+      ],
+      "keypoints": [
+        [
+          "m0-validation"
+        ],
+        [
+          "组字",
+          "LineEdit",
+          "text_changed"
+        ],
+        [
+          "提交",
+          "回车"
+        ]
+      ],
+      "reference": "docs/m0-validation.md「发现」：iOS 上 Godot 4.7.2 把未提交的组字文本写进 LineEdit.text 并触发 text_changed；物品命名要以提交（回车）时的文本为准。"
+    },
+    {
+      "id": "D3",
+      "category": "D",
+      "question": "之前地图上的光会透过墙照到外面，原因是什么？后来怎么改的？",
+      "files": [
+        "docs/m3-progress.md"
+      ],
+      "keypoints": [
+        [
+          "m3-progress"
+        ],
+        [
+          "roomin"
+        ],
+        [
+          "多算",
+          "一列一行"
+        ],
+        [
+          "visible",
+          "edge",
+          "可走"
+        ]
+      ],
+      "reference": "docs/m3-progress.md「光不穿墙」：光地形取了墙后格子、格角取最亮、原作 roomin 多算一列一行；改法是核心 light.visible 只算到墙、light.edge 只取挨着可走地面的格、渲染器按格取值。"
+    },
+    {
+      "id": "D4",
+      "category": "D",
+      "question": "以后如果要加一只占好几个格子的大怪，现在的设计留了什么余地？",
+      "files": [
+        "docs/decisions/0003-abstraction-timing.md",
+        "docs/technical-design.md"
+      ],
+      "keypoints": [
+        [
+          "0003",
+          "technical-design"
+        ],
+        [
+          "单位 ID",
+          "unit id",
+          "ID 写进",
+          "arena"
+        ],
+        [
+          "占格",
+          "Observation",
+          "锚点"
+        ]
+      ],
+      "reference": "决策 0003 补充（多格单位）：格子存单位 ID，多格单位可把同一 ID 写进每一格，单位用 arena ID 引用；对外边界预留 Observation 的单位 ID、锚点和占格（经典恒 1×1）。"
+    },
+    {
+      "id": "D5",
+      "category": "D",
+      "question": "测试用的那个自动玩家，能按哪几种玩法风格生成对局脚本？",
+      "files": [
+        "core/rogue-cli/src/bot.rs",
+        "AGENTS.md"
+      ],
+      "keypoints": [
+        [
+          "bot"
+        ],
+        [
+          "物品",
+          "item"
+        ],
+        [
+          "存读档",
+          "save"
+        ],
+        [
+          "结局",
+          "ending"
+        ],
+        [
+          "护符",
+          "amulet"
+        ]
+      ],
+      "reference": "rogue-cli bot --style K（core/rogue-cli/src/bot.rs）：1 物品、2 存读档、4 结局、8 带护符，可按位组合。"
+    }
+  ]
+}
