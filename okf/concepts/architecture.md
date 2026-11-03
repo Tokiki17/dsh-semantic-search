@@ -43,7 +43,7 @@ A search runs dense recall (brute-force cosine over a cached Float32 matrix) and
 The setup page is the package's browser half (`./client`): it renders on the bundle's Plugins page through the `plugins.bundle.config` slot and calls the host `semanticSearch` service through the `./typert` manifest. That service reports state, tests a draft configuration with real requests, saves it with DSH's config editor (which hot-reloads the plugin), stores keys in DSH credentials, drives local model downloads, and rebuilds stale collections.[^service][^client]
 
 The system-prompt section routes questions about documents and paraphrased wording to `knowledge_search`, and code, identifiers and file names to file search. Models largely ignore that section, so the routing has two other paths:[^enforce][^eval]
-- `search.instructions` (default on, active once a semantic index exists) sends the same rule as an agent-instructions message, the way DSH sends AGENTS.md. It made doc questions faster and cheaper in the 2026-11-03 evaluation.
+- `search.instructions` (default on, active once a semantic index exists) sends the same rule as an agent-instructions message, the way DSH sends AGENTS.md; before each step it checks the session's visible surface and re-sends the rule when compaction has removed it. It made doc questions faster and cheaper in the 2026-11-03 evaluation.
 - `search.enforce` (default `off`) has three modes: `remind`, `docs` (refuses the first doc grep of a turn) and `prefetch` (attaches doc hits to each message). None of them beat no steering.
 
 The design rationale and the comparison with MCP or skill-based integration are in the research report.[^research]

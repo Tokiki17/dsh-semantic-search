@@ -18,7 +18,7 @@ const outDir = positionals[0]
 if (!outDir) throw new Error('usage: node eval/score.ts <out-dir> [--overrides file]')
 
 interface Question { id: string; category: string; keypoints: string[][] }
-const { questions } = JSON.parse(readFileSync(join(import.meta.dirname, 'questions.json'), 'utf8')) as { questions: Question[] }
+const { questions } = JSON.parse(readFileSync(process.env.EVAL_QUESTIONS ?? join(import.meta.dirname, 'questions.json'), 'utf8')) as { questions: Question[] }
 const byId = new Map(questions.map((q) => [q.id, q]))
 const overrides: Record<string, number> = values.overrides && existsSync(values.overrides) ? JSON.parse(readFileSync(values.overrides, 'utf8')) : {}
 
@@ -85,8 +85,7 @@ const summarize = (subset: Row[]) => ({
 
 const groups: Record<string, Record<string, ReturnType<typeof summarize>>> = {}
 for (const category of ['A', 'B', 'C', 'D', 'all']) {
-  for (const config of ['A', 'B', 'C', 'D', 'E', 'P', 'Q', 'R', 'G', 'F', 'I']) {
-    if (!rows.some((r) => r.config === config)) continue
+  for (const config of [...new Set(rows.map((r) => r.config))]) {
     const subset = rows.filter((r) => r.config === config && (category === 'all' || r.category === category))
     ;(groups[category] ??= {})[config] = summarize(subset)
   }

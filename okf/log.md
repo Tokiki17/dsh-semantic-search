@@ -2,6 +2,8 @@
 
 ## 2026-11-03
 
+- Second-repository evaluation (TileFillerBoardGenerator, baseline R): `search.instructions` now re-sends the rule when compaction removes it; rerank is off by default and `search.rerankCandidates` defaults to 15; `Store.open` sets `busy_timeout` before WAL. Updated the architecture and verification concepts.
+
 - Retrieval evaluation (`eval/`) on RogueReborn with Codex and DSH.
   - The system prompt now routes doc and paraphrase questions to `knowledge_search` and code to file search.
   - Added `search.enforce` (`off` by default; `remind`, `docs`, `prefetch`).

@@ -25,7 +25,7 @@ sources:
 The two model roles are configured separately:[^config]
 
 - `embedding.source`: `none` (default, keyword search only), `local`, `dashscope`, `siliconflow` or `custom`.
-- `rerank.source`: `same` (default, follows the embedding source and is off when that is `none`), `off`, or one of the four model sources. A `custom` service without `rerank.model` leaves reranking off when followed implicitly.
+- `rerank.source`: `off` (default; reranking did not raise accuracy in the agent evaluations and slowed searches), `same` (follows the embedding source, off when that is `none`), or one of the four model sources. A `custom` service without `rerank.model` leaves reranking off when followed implicitly.
 
 `dashscope` uses the native Model Studio endpoints (query/document typing and instructions); the other sources use OpenAI-compatible `/embeddings` and Jina/Cohere-style `/rerank`. A role counts as remote unless its URL is a loopback address; the local source always is. Keys are read by credential name (`providers.*.apiKeyEnv`) from DSH credentials, then the environment.
 

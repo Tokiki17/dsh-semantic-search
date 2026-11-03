@@ -26,7 +26,7 @@ test('docHits keeps prose files and named collections', () => {
 })
 
 type Listener = (...args: any[]) => Promise<any>
-function harness(mode: EnforceDeps['mode'], overrides: Partial<EnforceDeps> = {}) {
+function harness(mode: EnforceDeps['mode'], overrides: Partial<EnforceDeps> = {}, agent: object = {}) {
   const listeners = new Map<string, Listener>()
   const searches: string[] = []
   installEnforcement({ on: (event: string, listener: Listener) => listeners.set(event, listener) }, {
@@ -43,7 +43,6 @@ function harness(mode: EnforceDeps['mode'], overrides: Partial<EnforceDeps> = {}
     },
     ...overrides,
   })
-  const agent = {}
   const user = (text: string) => ({ id: 'u', role: 'user', content: [{ type: 'text', text }], source: { kind: 'user' } })
   const preStep = (messages: unknown[]) =>
     listeners.get('agent/pre-step')!({ agent, messages, turn: 1, step: 1, signal: new AbortController().signal }, async () => ({ kind: 'enter', messages }))
@@ -123,4 +122,47 @@ test('instructions are skipped without a semantic index', async () => {
   const h = harness('off', { instructions: true, indexed: async () => false })
   const entered = await h.preStep([h.user('问题')])
   assert.equal(entered.messages.length, 1)
+})
+
+test('instructions come back once compaction drops them from the surface', async () => {
+  // A fake session: entered messages become user/message events on the surface.
+  const events: Array<{ type: string; data: { source: unknown } }> = []
+  const surface = { nodes: [] as number[] }
+  const agent = { session: { surface, eventAt: (seq: number) => events[seq] } }
+  const h = harness('off', { instructions: true }, agent)
+  const commit = (messages: Array<{ source: unknown }>) => {
+    for (const message of messages) surface.nodes.push(events.push({ type: 'user/message', data: { source: message.source } }) - 1)
+  }
+  const first = await h.preStep([h.user('问题一')])
+  assert.equal(first.messages[0].source.form, 'instructions')
+  commit(first.messages)
+  // Later steps of the turn, and a resumed session, see the rule on the surface.
+  assert.equal((await h.preStep([])).messages.length, 0)
+  assert.equal((await h.preStep([h.user('问题二')])).messages.length, 1)
+  // Compaction replaces the head of the surface with a summary.
+  surface.nodes.splice(0, surface.nodes.length)
+  const after = await h.preStep([])
+  assert.equal(after.messages.length, 1)
+  assert.match(after.messages[0].content[0].text, /Instructions from: semantic-search plugin/)
+})
+
+test('instructions start once an index appears, checked at the next user message', async () => {
+  let indexed = false
+  const h = harness('off', { instructions: true, indexed: async () => indexed })
+  assert.equal((await h.preStep([h.user('问题一')])).messages.length, 1)
+  indexed = true
+  assert.equal((await h.preStep([])).messages.length, 0)
+  const next = await h.preStep([h.user('问题二')])
+  assert.equal(next.messages.length, 2)
+  assert.equal(next.messages[0].source.form, 'instructions')
+})
+
+test('a failed index check is retried on the next step', async () => {
+  let calls = 0
+  const h = harness('off', { instructions: true, indexed: async () => (++calls === 1 ? Promise.reject(new Error('timeout')) : true) })
+  assert.equal((await h.preStep([h.user('问题')])).messages.length, 1)
+  const retried = await h.preStep([])
+  assert.equal(retried.messages.length, 1)
+  assert.equal(retried.messages[0].source.form, 'instructions')
+  assert.equal(calls, 2)
 })

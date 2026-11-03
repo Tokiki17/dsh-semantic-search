@@ -81,7 +81,8 @@ export class Store {
       closeSync(openSync(path, 'a', 0o600))
     }
     const db = new DatabaseSync(path)
-    db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;')
+    // busy_timeout first: switching to WAL takes a lock, and concurrent opens (two sessions starting) would fail at once.
+    db.exec('PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;')
     db.exec(SCHEMA)
     return new Store(path, db)
   }

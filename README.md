@@ -6,12 +6,12 @@ Semantic search for DeepSeek Harness (DSH). It searches the current workspace (c
 
 1. embedding recall and SQLite FTS5 keyword recall run side by side;
 2. the two lists are fused with RRF;
-3. a rerank model reorders the fused list.
+3. optionally, a rerank model reorders the fused list (off by default).
 
 It works right after installation: by default no model is used and search is keyword-only. For search by meaning, open **Plugins → Semantic Search** and pick where the two models come from, in three steps:
 
 - **Embedding model**: local Qwen3-Embedding 0.6B / 4B / 8B (the plugin downloads llama.cpp and the model and runs them on this machine; nothing leaves it), Alibaba Cloud Model Studio, SiliconFlow, or any OpenAI-compatible service.
-- **Rerank model**: follows the embedding source by default; you can pick another source or turn it off.
+- **Rerank model**: off by default, because in our agent evaluations it did not raise accuracy and slowed searches; you can use the embedding source or pick another.
 - Online services only need a key, which is stored in DSH credentials. Local models need one click on **Download**; everything else is configured for you.
 
 Research notes (Chinese): [docs/research.zh.md](docs/research.zh.md).
@@ -56,7 +56,7 @@ You can also override the `semantic-search` row in the profile's `cordis.patch.y
       source: local              # none (default) | local | dashscope | siliconflow | custom
       model: qwen3-embedding-0.6b
     rerank:
-      source: same               # same (default) | off | local | dashscope | siliconflow | custom
+      source: 'off'              # off (default) | same | local | dashscope | siliconflow | custom
 ```
 
 | Source | Embedding model | Rerank model | Key credential |
@@ -75,7 +75,7 @@ Measured on an Apple M4 (16 GB, macOS 15.7) with Homebrew llama.cpp 0.8.0 (0.2.0
 - **First index:** 11,205 chunks in 24.3 min, about 7.7 chunks/s. Later runs only re-embed changed files.
 - **Index size:** 58 MB.
 - **Memory:** about 1.7 GB for the embedding server and 1.6 GB for the rerank server. With `local.ctx: 2048` each server uses about 1.0 GB.
-- **Query latency:** 31–176 ms with fusion only, 1.3–2.0 s when reranking 15 candidates, and 2.8–3.8 s when reranking 30 (the default). Set `search.rerankCandidates: 15` or turn reranking off for faster answers.
+- **Query latency:** 31–176 ms with fusion only, 1.3–2.0 s when reranking 15 candidates (the default candidate count when rerank is on), and 2.8–3.8 s when reranking 30. Rerank is off by default; in the agent evaluations it did not change accuracy (eval/README.md).
 
 All five test queries returned the matching section first when rerank was on. Full numbers are in the Chinese README.
 
@@ -91,7 +91,7 @@ All five test queries returned the matching section first when rerank was on. Fu
 The plugin's system prompt tells the model to search first for questions about documents and for paraphrased wording, and to use file search for code. Measured in DSH with `deepseek-flash` ([eval/README.md](eval/README.md)):
 - From the prompt alone, the model rarely called `knowledge_search`.
 - Forcing the call (`search.enforce: docs`) or attaching hits (`prefetch`) did not help, so `search.enforce` is off by default.
-- What helped was the routing rule delivered as agent instructions. `search.instructions` (on by default, active once a semantic index exists) sends it the way DSH sends AGENTS.md. Doc-fact questions then took about 0.78× the time, paraphrased ones about 0.75× the tokens, and code questions were unchanged within noise.
+- What helped was the routing rule delivered as agent instructions. `search.instructions` (on by default, active once a semantic index exists) sends it the way DSH sends AGENTS.md, and sends it again when compaction removes it. Doc-fact questions then took about 0.78× the time, paraphrased ones about 0.75× the tokens, and code questions were unchanged within noise.
 - The same rule written in the project's or the user's `AGENTS.md` did slightly better. The rule text is in the Chinese README.
 
 ## Privacy

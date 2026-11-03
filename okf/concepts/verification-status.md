@@ -39,7 +39,12 @@ On 2026-11-03, 20 questions over the RogueReborn repository were run against Cod
 - `search.enforce: docs` and `prefetch` were not better than no steering.
 - The rule sent by the plugin through `search.instructions` captured most of the `AGENTS.md` gain: doc facts at 0.78× time, paraphrased questions at 0.75× tokens, code questions within noise.
 
-Not covered: Claude Code (its CLI was not logged in on this machine), harder questions, other repositories, and DSH models other than `deepseek-flash`.
+A second repository (TileFillerBoardGenerator, DSH, baseline: the `AGENTS.md` rule) was measured on the same day:[^eval]
+- With compaction forced every ~21k tokens, the re-sent plugin rule came back as often as DSH's AGENTS.md; the model made all its searches before the first compaction in every config, so no behaviour change was measurable.
+- Rerank on made doc-fact questions 1.5× (15 candidates) to 2.0× (30) slower with no accuracy gain; rerank is now off by default (`rerank.source: off`) and `search.rerankCandidates` defaults to 15 when it is on.
+- Concurrent store opens could fail with `database is locked`; fixed by setting `busy_timeout` before switching to WAL (covered by a 12-process test).
+
+Not covered: Claude Code (its CLI was not logged in on this machine), harder questions, and DSH models other than `deepseek-flash`.
 
 ## Verified for 0.1.0 (historical)
 

@@ -88,10 +88,11 @@ export const Config: z<Config> = z.object({
     batchSize: z.natural().min(1).max(256),
   }).default({ source: 'none' }),
   rerank: z.object({
-    source: z.union(['same', 'off', ...MODEL_SOURCES] as const).default('same')
-      .description('Rerank model source. same = the embedding source (off when that is none).'),
+    // Off by default: in the agent evaluations (eval/README.md) reranking never raised accuracy and slowed doc questions.
+    source: z.union(['same', 'off', ...MODEL_SOURCES] as const).default('off')
+      .description('Rerank model source. off (default) = hybrid fusion order; same = the embedding source (off when that is none).'),
     model: z.string().description('Model name; default depends on the source.'),
-  }).default({ source: 'same' }),
+  }).default({ source: 'off' }),
   providers: z.object({
     dashscope: z.object({
       baseURL: z.string().default('https://dashscope.aliyuncs.com')
@@ -135,7 +136,7 @@ export const Config: z<Config> = z.object({
   search: z.object({
     topK: z.natural().min(1).max(50).default(8),
     candidates: z.natural().min(5).max(500).default(50),
-    rerankCandidates: z.natural().min(1).max(200).default(30),
+    rerankCandidates: z.natural().min(1).max(200).default(15),
     maxSnippetChars: z.natural().min(200).default(1500),
     refreshBeforeSearch: z.boolean().default(true),
     maxRefreshFiles: z.natural().default(50),

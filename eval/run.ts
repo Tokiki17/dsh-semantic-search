@@ -14,9 +14,17 @@
  *   G  eval-g: working-tree plugin with search.enforce: docs (first doc grep of a turn refused)
  *   F  eval-f: working-tree plugin with search.enforce: prefetch (document hits attached to each message)
  *   I  eval-i: working-tree plugin with search.instructions: true (routing rule as an instructions message)
+ *   R15, R30  eval-r15 / eval-r30: R with rerank on, 15 or 30 candidates
+ *   CR, CI1, CJ  eval-cr / eval-ci1 / eval-cj: compaction forced at ~31k tokens; R, the
+ *     instructions rule as released in fc04142 (sent once), and the current one (re-sent)
+ *   (Every config whose name starts with R or CR gets $DSH_AGENTS_HOME_R.)
  *   (Q and R pin search.enforce: off, so they match the build they were measured with.)
  *
  *   node eval/run.ts <repo> <out-dir> [--harness codex|claude|dsh] [--reps N] [--jobs N] [--model M] [--effort E] [--only A1,B2] [--configs A,B]
+ *
+ * EVAL_QUESTIONS picks another question file (default questions.json).
+ * --bundles "A1,B1,C1,D1;A2,B2,C2,D2" asks each group as one task (ids L1, L2, …), to
+ * test what survives compaction in a long turn.
  *
  * Each run is saved as JSON event lines in <out-dir>/<id>-<config>-<rep>.jsonl,
  * followed by a {"type":"eval.timing"} line with the wall-clock time.
@@ -36,6 +44,7 @@ const { values, positionals } = parseArgs({
     effort: { type: 'string', default: 'medium' },
     only: { type: 'string' },
     configs: { type: 'string', default: 'A,B,C' },
+    bundles: { type: 'string' },
   },
 })
 const [repo, outDir] = positionals.map((path) => resolve(path))
@@ -43,7 +52,7 @@ if (!repo || !outDir) throw new Error('usage: node eval/run.ts <repo> <out-dir> 
 const BIN = process.env.AGENT_BIN ?? (values.harness === 'claude' ? 'claude' : values.harness === 'dsh' ? 'dsh' : 'codex')
 const MCP_ARGS = [join(import.meta.dirname, 'mcp-server.ts')]
 
-const { questions } = JSON.parse(readFileSync(join(import.meta.dirname, 'questions.json'), 'utf8')) as { questions: Array<{ id: string; question: string }> }
+const { questions } = JSON.parse(readFileSync(process.env.EVAL_QUESTIONS ?? join(import.meta.dirname, 'questions.json'), 'utf8')) as { questions: Array<{ id: string; question: string }> }
 const only = values.only?.split(',')
 mkdirSync(outDir, { recursive: true })
 
@@ -71,8 +80,15 @@ const PROMPT_TAIL = '\n\n请在当前仓库中查找答案。回答简洁，给�
 
 interface Job { id: string; config: string; rep: number; question: string }
 const jobs: Job[] = []
+const byId = new Map(questions.map((q) => [q.id, q]))
+const tasks = values.bundles
+  ? values.bundles.split(';').map((group, index) => ({
+      id: `L${index + 1}`,
+      question: '依次回答下面几个问题，每题单独作答并标明题号。\n\n' + group.split(',').map((id, n) => `${n + 1}. ${byId.get(id)!.question}`).join('\n'),
+    }))
+  : questions
 for (let rep = 1; rep <= Number(values.reps); rep++) {
-  for (const q of questions) {
+  for (const q of tasks) {
     if (only && !only.includes(q.id)) continue
     for (const config of values.configs!.split(',')) jobs.push({ id: q.id, config, rep, question: q.question })
   }
@@ -110,7 +126,7 @@ const runOne = (job: Job) => new Promise<void>((done) => {
         prompt,
       ]
   const started = Date.now()
-  const env = job.config === 'R' && process.env.DSH_AGENTS_HOME_R ? { ...process.env, DSH_AGENTS_HOME: process.env.DSH_AGENTS_HOME_R } : process.env
+  const env = /^C?R/.test(job.config) && process.env.DSH_AGENTS_HOME_R ? { ...process.env, DSH_AGENTS_HOME: process.env.DSH_AGENTS_HOME_R } : process.env
   const child = spawn(BIN, args, { cwd: repo, env, stdio: ['ignore', 'pipe', 'pipe'] })
   let out = ''
   let err = ''

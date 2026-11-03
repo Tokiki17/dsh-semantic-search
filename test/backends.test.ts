@@ -126,8 +126,11 @@ test('the default configuration has no models: keyword search only', () => {
   assert.deepEqual(models, { embedding: undefined, rerank: undefined })
 })
 
-test('rerank follows the embedding source by default and can use its own source', () => {
-  const local = resolveModels(config({ embedding: { source: 'local' } }))
+test('rerank is off by default, can follow the embedding source, or use its own source', () => {
+  const plain = resolveModels(config({ embedding: { source: 'local' } }))
+  assert.equal(plain.rerank, undefined)
+
+  const local = resolveModels(config({ embedding: { source: 'local' }, rerank: { source: 'same' } }))
   assert.equal(local.embedding!.model, 'qwen3-embedding-0.6b')
   assert.equal(local.embedding!.queryFormat, 'qwen3')
   assert.equal(local.embedding!.baseURL, undefined, 'the local server manager supplies the URL')
@@ -161,7 +164,7 @@ test('local roles resolve their URL through the local model manager on first use
     : [200, { results: [{ index: 0, relevance_score: 1 }] }])
   const started: string[] = []
   try {
-    const backend = createBackend(resolveModels(config({ embedding: { source: 'local' } })), {
+    const backend = createBackend(resolveModels(config({ embedding: { source: 'local' }, rerank: { source: 'same' } })), {
       apiKey: () => async () => undefined,
       local: { async baseURL(role, model) { started.push(`${role}:${model}`); return `${server.url}/v1/` } },
       queryInstruct: 'q', rerankInstruct: undefined, timeoutMs: 5000,

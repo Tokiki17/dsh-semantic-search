@@ -75,3 +75,18 @@ test('database files are readable by the owner only', () => {
     dir.cleanup()
   }
 })
+
+test('processes opening a new store at the same moment wait for each other instead of failing', async () => {
+  const { spawn } = await import('node:child_process')
+  const dir = tempDir()
+  const path = join(dir.path, 'shared.db')
+  const script = `import { Store } from ${JSON.stringify(new URL('../src/store.ts', import.meta.url).href)}; Store.open(process.argv[1]).close()`
+  const exits = await Promise.all(
+    Array.from({ length: 12 }, () => new Promise<number | null>((resolve) => {
+      const child = spawn(process.execPath, ['--input-type=module', '-e', script, path], { stdio: 'ignore' })
+      child.on('close', resolve)
+    })),
+  )
+  dir.cleanup()
+  assert.deepEqual(exits, Array(12).fill(0))
+})

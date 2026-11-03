@@ -11,9 +11,12 @@
  * - `prefetch`: search each user message and attach the document hits before the model's first step.
  *
  * Separately, `search.instructions` delivers a routing rule the way DSH delivers
- * AGENTS.md: a user-role `<system-reminder>` message with form `instructions`,
- * once per agent, before its first user message. The same rule written in AGENTS.md
- * changed behaviour where the plugin's system-prompt section did not.
+ * AGENTS.md: a user-role `<system-reminder>` message with form `instructions`.
+ * Like DSH's agent-instructions plugin, it checks the session's visible surface
+ * before each step and sends the rule again when it is missing, so the rule
+ * survives compaction and is not repeated when a persisted session resumes.
+ * The same rule written in AGENTS.md changed behaviour where the plugin's
+ * system-prompt section did not.
  *
  * `search.enforce` is off by default: measured in DSH with deepseek-flash, neither
  * `docs` nor `prefetch` beat no steering (the model kept grep-ing after the search).
@@ -86,8 +89,13 @@ interface TurnState {
   steered: boolean
 }
 
+interface SessionLike {
+  readonly surface?: { readonly nodes?: Iterable<number> }
+  eventAt?(seq: number): { type?: string; data?: { source?: { kind?: string; form?: string } } } | undefined
+}
 interface AgentLike {
   readonly id?: unknown
+  readonly session?: SessionLike
 }
 interface PreStepPayload {
   agent: AgentLike
@@ -124,7 +132,22 @@ export interface EnforceDeps {
 export function installEnforcement(ctx: unknown, deps: EnforceDeps): void {
   if (deps.mode === 'off' && !deps.instructions) return
   const hooks = ctx as Hooks
-  const instructed = new WeakSet<AgentLike>()
+  const indexedAgents = new WeakSet<AgentLike>()
+  const unsure = new WeakSet<AgentLike>()
+  /** Fallback for hosts without a session surface: deliver once per agent. */
+  const delivered = new WeakSet<AgentLike>()
+  const isRule = (source: { kind?: string; form?: string } | undefined) => source?.kind === SOURCE_KIND && source.form === 'instructions'
+  const ruleVisible = (agent: AgentLike, pending: readonly UserMessage[]): boolean => {
+    if (pending.some((message) => isRule(message.source as { kind?: string; form?: string }))) return true
+    const session = agent.session
+    const nodes = session?.surface?.nodes
+    if (session?.eventAt === undefined || nodes === undefined) return delivered.has(agent)
+    for (const seq of nodes) {
+      const event = session.eventAt(seq)
+      if (event?.type === 'user/message' && isRule(event.data?.source)) return true
+    }
+    return false
+  }
   const turns = new WeakMap<AgentLike, TurnState>()
   const state = (agent: AgentLike): TurnState => {
     let turn = turns.get(agent)
@@ -135,23 +158,39 @@ export function installEnforcement(ctx: unknown, deps: EnforceDeps): void {
   hooks.on('agent/pre-step', async (payload, next) => {
     const decision = await next()
     const users = payload.messages.filter((message) => message.source.kind === 'user')
-    if (users.length === 0) return decision
     // A new user message opens a new turn for steering purposes.
     const turn = { searched: false, steered: false }
-    turns.set(payload.agent, turn)
+    if (users.length > 0) turns.set(payload.agent, turn)
     if (decision.kind !== 'enter') return decision
     let entered: PreStepDecision = decision
-    if (deps.instructions && !instructed.has(payload.agent)) {
-      instructed.add(payload.agent)
-      const indexed = await deps.indexed(payload.agent, AbortSignal.any([payload.signal, AbortSignal.timeout(5000)])).catch(() => false)
+    if (deps.instructions && !ruleVisible(payload.agent, decision.messages)) {
+      // Check the index once per user message until one exists (and again on the next step
+      // after a failed check); afterwards every step only looks at the surface, which is how
+      // the rule comes back after compaction.
+      let indexed = indexedAgents.has(payload.agent)
+      if (!indexed && (users.length > 0 || unsure.has(payload.agent))) {
+        const result = await deps.indexed(payload.agent, AbortSignal.any([payload.signal, AbortSignal.timeout(5000)])).catch((error: unknown) => {
+          if (payload.signal.aborted) throw error
+          deps.log?.(`semantic-search: index check failed (${error instanceof Error ? error.message : String(error)}); retrying next step`)
+          return undefined
+        })
+        if (result === undefined) unsure.add(payload.agent)
+        else unsure.delete(payload.agent)
+        indexed = result === true
+        if (indexed) indexedAgents.add(payload.agent)
+      }
       if (indexed) {
         const rule = createUserMessage({
           content: [{ type: 'text', text: instructionsText() }],
           source: { kind: SOURCE_KIND, form: 'instructions' },
         } as unknown as Parameters<typeof createUserMessage>[0])
-        entered = { ...decision, messages: [rule as UserMessage, ...decision.messages] }
+        // Ahead of this step's new messages, as DSH places AGENTS.md before the first prompt.
+        const at = users.length > 0 ? decision.messages.indexOf(users[0]!) : decision.messages.length
+        entered = { ...decision, messages: decision.messages.toSpliced(at < 0 ? 0 : at, 0, rule as UserMessage) }
+        delivered.add(payload.agent)
       }
     }
+    if (users.length === 0) return entered
     if (deps.mode !== 'prefetch') return entered
     const query = users
       .flatMap((message) => message.content)

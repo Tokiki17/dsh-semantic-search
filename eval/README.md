@@ -7,6 +7,9 @@ node eval/daemon.ts <repo> 8790                      # index <repo> with local Q
 EVAL_RERANK=off node eval/daemon.ts <repo> 8791      # same store, rerank off
 AGENT_BIN=<codex> node eval/run.ts <repo> eval/runs/<name> --reps 2 --jobs 4 [--configs A,B,C,D,E]
 node eval/score.ts eval/runs/<name> [--overrides overrides.json]
+# other question sets and long multi-question tasks (DSH)
+EVAL_QUESTIONS=eval/questions-tfbg.json node eval/run.ts <repo> eval/runs/<name> --harness dsh --configs CR,CJ --bundles "B1,A2,C1,D2;…"
+DSH_HOME=<home> EVAL_QUESTIONS=eval/questions-tfbg.json node eval/compaction.ts eval/runs/<name> "B1,A2,C1,D2;…"
 ```
 
 | Config | Setup |
@@ -170,5 +173,59 @@ Per-question ratio against A (mean of per-question median ratios, with a bootstr
 - **`search.instructions` now defaults to on.** It only acts once a semantic index exists, that is, after the user has chosen a model and built one. The AGENTS.md rule stays the stronger option and is still recommended.
 
 **Limits:**
-- The rule is sent once per agent and is not re-sent after compaction.
+- The rule was sent once per agent and lost after compaction; it is now re-sent (see the TileFillerBoardGenerator results below).
 - Results come from one repository and one model.
+
+## Results 2026-11-03 (TileFillerBoardGenerator, DSH, baseline R)
+
+**Setup:**
+- Second repository: TileFillerBoardGenerator at `0a336ea` (a `git archive` snapshot), .NET + Python, about 30k lines, 54 Markdown files, mostly Chinese; 159 indexed files, 2,054 chunks. Questions: [questions-tfbg.json](questions-tfbg.json), same four groups.
+- Agent: DSH 0.2.1-rc.5 headless, `deepseek-flash`, throwaway `DSH_HOME`.
+- Baseline is R: the routing rule in AGENTS.md (`DSH_AGENTS_HOME`), plugin `search.instructions: false`, rerank off.
+
+### Experiment 1: the plugin's rule after compaction
+
+`search.instructions` now checks the session's visible surface before every step and sends the rule again when it is missing, the way DSH's agent-instructions plugin re-sends AGENTS.md. The released version (fc04142) sent it once per agent, so compaction removed it.
+
+Compaction was forced with `compaction-basic` at `thresholdRatio: 0.02` (about 21k tokens) and `retainTokens: 6000`. Each task asked four questions in one turn (code questions first, then doc and paraphrased ones), 5 tasks × 3 runs per config:
+
+| Config | Setup |
+|---|---|
+| CR | R |
+| CI1 | plugin rule as released in fc04142 (sent once) |
+| CJ | plugin rule re-sent when missing (current) |
+
+| Config | Compactions per run | Rule sends after compaction | `knowledge_search` after compaction | Time vs CR | Tokens vs CR | Accuracy |
+|---|---|---|---|---|---|---|
+| CR | 9.2 | 2.1 | 0 | 1 | 1 | 0.99 |
+| CI1 | 10.5 | 0 | 0 | 1.28 [0.99–1.62] | 0.97 [0.83–1.11] | 0.99 |
+| CJ | 8.0 | 2.1 | 0 | 1.06 [0.86–1.27] | 0.91 [0.69–1.14] | 0.99 |
+
+Ratios are the mean of per-task median ratios against CR, with a bootstrapped 95% CI.
+
+**Findings:**
+- **The re-send works.** After compaction, CJ re-sent the rule exactly as often as DSH re-sent AGENTS.md in CR; CI1 never did.
+- **It made no measurable difference to behaviour here.** In every config the model ran all of its `knowledge_search` calls before the first compaction: it planned the four searches up front. CJ landed closer to CR than CI1 did, but every interval includes 1.
+- The change is kept because it is correct and it also fixes two edge cases: a resumed session (`--session-id`, a new agent object) no longer gets a duplicate rule, and an index that appears mid-session is picked up at the next user message.
+- **A real bug surfaced.** One run's index check failed with SQLite `database is locked` after 11 ms: `Store.open` switched to WAL before setting `busy_timeout`, so concurrent processes opening the store (several sessions starting at once) could fail immediately. That is the likely reason the rule was missing from one pilot run. Fixed in `src/store.ts` (busy_timeout first; a 12-process test failed 3 of 60 opens before and 0 after), and a failed index check is now retried on the next step.
+
+### Experiment 2: rerank candidates
+
+R (rerank off) against R15 and R30 (Qwen3-Reranker 0.6B on, 15 or 30 candidates): 20 questions × 3 runs per config.
+
+| Group | R15 time | R15 tokens | R30 time | R30 tokens |
+|---|---|---|---|---|
+| A exact | 0.80 [0.71–0.87] | 0.81 [0.66–0.95] | 1.04 [0.90–1.18] | 1.13 [0.81–1.54] |
+| B code behaviour | 1.20 [0.79–1.69] | 1.13 [0.93–1.35] | 1.28 [0.72–2.16] | 1.11 [0.83–1.40] |
+| C doc facts | 1.50 [1.16–1.95] | 0.95 [0.71–1.19] | 2.03 [1.57–2.59] | 1.27 [1.04–1.54] |
+| D paraphrased | 1.34 [1.14–1.55] | 1.31 [1.13–1.47] | 1.60 [1.22–1.91] | 1.18 [0.87–1.44] |
+| All | 1.21 [1.02–1.42] | 1.05 [0.92–1.18] | 1.49 [1.20–1.80] | 1.17 [1.02–1.32] |
+
+**Accuracy:** R 60/60, R15 59.5/60, R30 59/60. The three partial answers were all D4, which gave the right mechanism but missed the concrete case (7x9 area 38, 281 short). The passage holding it never appeared in any config's search results, R's included; R's runs found it by grep afterwards. So the misses are not caused by reranking.
+
+**Findings:**
+- **Reranking made doc and paraphrased questions slower without improving accuracy.** Doc facts took 1.5× (15 candidates) and 2.0× (30) the time of no rerank. The A-group gain for R15 sits in a group that almost never searched (0.1 searches per run), so it is noise.
+- **Fewer candidates are cheaper:** R30 against R15 is slower in every group that searches.
+- **Defaults changed:** `rerank.source` now defaults to `off`, and `search.rerankCandidates` to 15 for those who turn it on. On both repositories rerank off was faster with equal accuracy.
+
+**Limits:** 3 runs per cell; one model; in experiment 1 the forced threshold is far below real use, so compaction is much more frequent than it would be.

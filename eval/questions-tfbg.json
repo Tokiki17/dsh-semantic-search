@@ -1,0 +1,172 @@
+{
+  "repo": "TileFillerBoardGenerator",
+  "snapshot": "0a336ea (git archive HEAD)",
+  "categories": {
+    "A": "代码精确定位：题目给出标识符或原文，grep 能直接命中",
+    "B": "代码概念：只描述行为，不给标识符",
+    "C": "文档事实：措辞接近文档原文",
+    "D": "改写与同义：口语化或换说法，原文里没有题目中的词"
+  },
+  "questions": [
+    {
+      "id": "A1",
+      "category": "A",
+      "question": "`MaxEncodedBitIndex` 定义在哪个文件，值是多少，是怎么算出来的？",
+      "files": ["Coordinator/OutputFormatter.cs"],
+      "keypoints": [["OutputFormatter"], ["619"], ["62"]],
+      "reference": "Coordinator/OutputFormatter.cs:13，= TensDigitCount * 10 - 1 = 62 × 10 − 1 = 619；十位字符表 0-9/A-Z/a-z 共 62 个，个位固定 0-9。"
+    },
+    {
+      "id": "A2",
+      "category": "A",
+      "question": "`worst_case_quotas` 定义在哪个文件？它为每个起点轨道计算配额时做了什么假设？",
+      "files": ["tools/question_bank_catalog.py"],
+      "keypoints": [["question_bank_catalog"], ["target", "目标"], ["available", "现有", "当前库存", "其他"]],
+      "reference": "tools/question_bank_catalog.py:230。对每个轨道 i，把它自己的容量设为总目标 target，其他轨道的容量设为当前 available（假设它们不再新增），做加权注水分配，i 分到的份额就是它的最差配额。"
+    },
+    {
+      "id": "A3",
+      "category": "A",
+      "question": "报错「玩家终点必须是题面 mask 中静态度为 1 的叶子」在哪里抛出？它检查的具体条件是什么？",
+      "files": ["tools/question_bank_catalog.py"],
+      "keypoints": [["question_bank_catalog"], ["parse_question_row"], ["1", "一个", "唯一"]],
+      "reference": "tools/question_bank_catalog.py:392，parse_question_row 内（require_terminal_leaf 为真时）；路径最后一格在 mask 内的四邻居恰好 1 个，否则抛 QuestionBankFormatError。"
+    },
+    {
+      "id": "A4",
+      "category": "A",
+      "question": "Coordinator 的 `--prefix-area` 默认值怎么决定？取值有什么限制，在哪里校验？",
+      "files": ["Coordinator/CommandLine.cs"],
+      "keypoints": [["CommandLine"], ["12"], ["min-area", "minarea", "min_area"]],
+      "reference": "Coordinator/CommandLine.cs:9 默认 0 表示自动：min-area < 12 用 1，否则 12；:135 校验显式值必须在 1..min-area，更深的前缀会遗漏短终态。"
+    },
+    {
+      "id": "A5",
+      "category": "A",
+      "question": "`HasSmallerSquareFirstStepImage` 做什么用？在什么情况下返回 true？",
+      "files": ["Core/Generator.cs"],
+      "keypoints": [["Generator.cs"], ["7", "D4", "八", "8"], ["字典序", "更小", "smaller", "小于"]],
+      "reference": "Core/Generator.cs:394，方形棋盘首步对称剪枝：对两格前缀 [start,next] 应用其余 7 个 D4 变换，若某个像也满足右下象限 + 首步左/下 + 中轴离轴规则且字典序更小，返回 true，当前前缀被剪掉（由 ShouldPruneCandidate :383 调用）。"
+    },
+    {
+      "id": "B1",
+      "category": "B",
+      "question": "生成器在正方形棋盘上，从起点走出的第一步有什么方向限制？这是在哪段代码里实现的？",
+      "files": ["Core/Generator.cs"],
+      "keypoints": [["Generator.cs"], ["左"], ["下"]],
+      "reference": "Core/Generator.cs:377 ShouldPruneCandidate：currentAreaCount == 1 且宽高相等时，首步只允许 diff == 1（向左）或 diff == -width（向下），并剪掉 D4 像中字典序更小的首步前缀。"
+    },
+    {
+      "id": "B2",
+      "category": "B",
+      "question": "判断两道题算不算同一道时，代码怎样把旋转、镜像后等价的题归成同一个身份？矩形和正方形有什么区别？",
+      "files": ["tools/question_bank_catalog.py"],
+      "keypoints": [["question_bank_catalog"], ["min", "最小"], ["8", "D4", "八"]],
+      "reference": "tools/question_bank_catalog.py:191 canonicalize_identity 对 symmetry_maps（:156）给出的每个变换计算 (宽, 高, 变换后起点, 变换后 mask)，取最小元组；矩形 4 个变换（D2），正方形再加 4 个共 8 个（D4）。"
+    },
+    {
+      "id": "B3",
+      "category": "B",
+      "question": "路径生长搜索里，从当前格出发的候选下一步是按什么顺序尝试的？",
+      "files": ["Core/Generator.cs"],
+      "keypoints": [["Generator.cs"], ["最低", "低位", "lowest", "低端"], ["最高", "高位", "highest", "高端"]],
+      "reference": "Core/Generator.cs:294：按候选掩码剩余位数的奇偶交替，奇数时取最低位（TrailingZeroCount），偶数时取最高位，形成 zigzag 扫描。"
+    },
+    {
+      "id": "B4",
+      "category": "B",
+      "question": "面积生产调度器在两种生成算法都有待跑任务时，空出来的并行槽位优先分给哪种任务？",
+      "files": ["tools/area_bank_driver.py"],
+      "keypoints": [["area_bank_driver"], ["少", "fewest", "最小", "fewer"]],
+      "reference": "tools/area_bank_driver.py:1204–1209：统计各类（direct / growth）正在运行的 future 数，从队列中挑所属类型活跃数最少的任务（并列取最靠前的）。"
+    },
+    {
+      "id": "B5",
+      "category": "B",
+      "question": "题库 CSV 校验时，怎么判断路径里相邻两步是合法的上下左右一步？左右移动有没有额外条件？",
+      "files": ["tools/question_bank_catalog.py"],
+      "keypoints": [["question_bank_catalog"], ["width", "宽"], ["同一行", "同行", "// width", "same row"]],
+      "reference": "tools/question_bank_catalog.py:370：两格序号差的绝对值等于 width（上下），或差为 1 且两格在同一行（before // width == after // width），防止跨行回绕；否则报「路径包含非四邻接步」。"
+    },
+    {
+      "id": "C1",
+      "category": "C",
+      "question": "Vivobook checkpoint 恢复内存故障的已确认原因是什么？.NET 单个字符串的长度上限是多少？",
+      "files": ["docs/checkpoint-memory-diagnosis.md"],
+      "keypoints": [["1,073,741,791", "1073741791", "0x3FFFFFDF"], ["字符串", "string"]],
+      "reference": "docs/checkpoint-memory-diagnosis.md:7–9：DirectCheckpointStore.LoadEvents 先 ReadAllBytes，再把整个日志解码为一个字符串后 Split；失败日志 1038.1–1517.2 MiB，超过 .NET 单字符串上限 0x3FFFFFDF = 1,073,741,791 字符。"
+    },
+    {
+      "id": "C2",
+      "category": "C",
+      "question": "面积至少 60% 的主对照里，6x6 growth 的 wall 时间 A/B 各是多少，配对中位降幅是多少？",
+      "files": ["docs/performance-optimization.md"],
+      "keypoints": [["83.8"], ["76.1", "76.2"], ["9.2"]],
+      "reference": "docs/performance-optimization.md:38：wall 83.844 / 76.173 秒，配对中位降幅 9.2%（95% 区间 8.8..9.6%）。"
+    },
+    {
+      "id": "C3",
+      "category": "C",
+      "question": "设计文档里最差配额的例子：等权库存 A=7500、B=7500、C=5000，T=20000 时，三个轨道的最差配额分别是多少？",
+      "files": ["docs/superpowers/specs/2026-09-07-area-bank-resumable-production-design.md"],
+      "keypoints": [["6666"], ["7500"]],
+      "reference": "area-bank 设计文档:33：7500、7500、6666；A/B 立即暂停，C 继续。"
+    },
+    {
+      "id": "C4",
+      "category": "C",
+      "question": "4x4 全部面积 10..15 的 direct 输出与独立玩家全路径枚举对比，结果如何？",
+      "files": ["docs/superpowers/specs/2026-09-07-area-bank-resumable-production-design.md", "okf/concepts/quality/validation-workflow.md"],
+      "keypoints": [["497"], ["0", "完全相同", "一致"]],
+      "reference": "area-bank 设计文档:92（及 validation-workflow.md:37）：canonical 集合完全相同，497 题，缺失 0、多出 0；可用 tools/verify_direct_4x4.py 重跑。"
+    },
+    {
+      "id": "C5",
+      "category": "C",
+      "question": "2026-09-09 18:02 只读复查时，全部 259 个登记面积分别处于什么状态、各多少个？",
+      "files": ["docs/checkpoint-memory-diagnosis.md", "okf/concepts/operations/search-operations.md"],
+      "keypoints": [["155"], ["87"], ["16"]],
+      "reference": "docs/checkpoint-memory-diagnosis.md:62：155 个 target_reached、87 个 exhausted、1 个 supply_resolved、16 个 running。"
+    },
+    {
+      "id": "D1",
+      "category": "D",
+      "question": "生成器的格子编号是从右下角往左数的，那批老关卡数据是怎么编号的？能直接拿去给网页小游戏玩吗？",
+      "files": ["okf/concepts/data/coordinate-systems.md"],
+      "keypoints": [["x + y", "x+y"], ["不能", "不可", "不互通", "不能直接"]],
+      "reference": "okf/concepts/data/coordinate-systems.md:15–30：生成器 index = (width-1-x) + y*width；ExampleLevelData 历史输入 index = x + y*W，并按 H:W 读维度；两套不互通，boards_8x10_normalized.csv 不能直接交给 play/index.html。"
+    },
+    {
+      "id": "D2",
+      "category": "D",
+      "question": "如果把挖洞程序重新编译了，服务器上旧的进度存档还能直接接着用吗？要怎么办？",
+      "files": ["docs/checkpoint-memory-diagnosis.md"],
+      "keypoints": [["SHA", "指纹", "身份", "identity"], ["不能", "不可", "不得", "不会"]],
+      "reference": "docs/checkpoint-memory-diagnosis.md:35：driver 目录 identity 和 manifest 都绑定二进制 SHA256，重编译改变身份；不得改 manifest hash 或关闭身份检查，应在副本上做有来源 hash、完整验证、可回退的迁移，保留原二进制、旧日志和 CSV。"
+    },
+    {
+      "id": "D3",
+      "category": "D",
+      "question": "挖洞那个程序早先做过一轮提速，拿 6x7 那组测的时候前后各跑了多久？",
+      "files": ["HolePunch/README.md"],
+      "keypoints": [["16"], ["5:58", "5 分 58", "358"]],
+      "reference": "HolePunch/README.md:80：6x7 h00、--threads 16，优化后 wall 约 16 秒，旧版约 5:58，Solver calls 与输出数量一致。"
+    },
+    {
+      "id": "D4",
+      "category": "D",
+      "question": "有个面积明明已经攒了三万多道题，为什么生产还说它没达标、还在继续跑？",
+      "files": ["docs/checkpoint-memory-diagnosis.md"],
+      "keypoints": [["起点", "轨道", "orbit"], ["281", "36,688", "36688"]],
+      "reference": "docs/checkpoint-memory-diagnosis.md:64：7x9 面积 38 已有 36,688 题，但指定起点轨道仍缺 281 题；总库存超过 20000 不代表起点配额达标。"
+    },
+    {
+      "id": "D5",
+      "category": "D",
+      "question": "玩家只看得到起点、看不到终点，项目是怎么保证只给起点时也只有一种走法的？",
+      "files": ["README.md", "HolePunch/README.md"],
+      "keypoints": [["叶子", "leaf", "度为 1", "度 1", "度为1"], ["终点"]],
+      "reference": "README.md 玩家唯一性一条、HolePunch/README.md:48：生产候选要求非起点的终点在静态盘面中是度为 1 的叶子，这样按固定 (start,end,mask) 求解等价于玩家只见起点的唯一性；HolePunch --validate-csv 和 Python catalog 都检查这一前提。"
+    }
+  ]
+}

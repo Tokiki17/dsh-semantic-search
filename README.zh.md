@@ -6,12 +6,12 @@
 
 1. 向量召回和 SQLite FTS5 关键词召回同时进行；
 2. 两路结果用 RRF 融合；
-3. 再由重排模型重排。
+3. 可选：再由重排模型重排（默认关闭）。
 
 装好就能用：默认不使用任何模型，只做关键词检索。需要按意思检索时，在「插件 → 语义检索」页面分三步选择两个模型的来源：
 
 - **向量模型**：本地 Qwen3-Embedding 0.6B / 4B / 8B（插件自动下载 llama.cpp 和模型并在本机运行，数据不出本机）、阿里云百炼、硅基流动，或任意 OpenAI 兼容服务。
-- **重排模型**：默认沿用向量模型的来源，也可以单独换一个来源，或者不使用。
+- **重排模型**：默认不使用。评测里重排没有提高准确率，反而让检索变慢；需要时可以沿用向量模型的来源，或单独选一个来源。
 - 在线服务只需填 Key，Key 只存进 DSH 凭据库；本地模型点「下载」即可，其余配置自动完成。
 
 调研报告：[docs/research.zh.md](docs/research.zh.md)。
@@ -53,7 +53,7 @@
 推荐在「插件 → 语义检索」页面配置：
 
 1. **向量模型**：选择来源。本地模型会标出下载大小和运行内存，按机器内存给出推荐；在线服务填 Key 后可以点「测试连接」，会发一次真实请求。
-2. **重排模型**：默认与向量模型同一来源，直接点「下一步」即可；需要不同来源时点「换一个来源」。
+2. **重排模型**：默认「不使用重排」，直接点「下一步」即可；想开启时选「沿用向量模型的来源」或单独选一个来源。
 3. **完成**：保存后插件按新配置重新加载。如果换了向量模型，页面会提示有几个知识库需要重建，并提供「后台重建」按钮。
 
 页面底部的「本地模型与磁盘」列出已下载的模型和占用空间，可以删除。模型存放在 `<DSH home>/semantic-search/models/`，卸载插件不会自动删除。
@@ -68,7 +68,7 @@
       source: local              # none（默认，只用关键词）| local | dashscope | siliconflow | custom
       model: qwen3-embedding-0.6b
     rerank:
-      source: same               # same（默认，沿用向量模型来源）| off | local | dashscope | siliconflow | custom
+      source: 'off'              # off（默认，不重排）| same（沿用向量模型来源）| local | dashscope | siliconflow | custom
 ```
 
 ### 各来源的默认模型和 Key
@@ -98,10 +98,10 @@ Key 按凭据名从 DSH 凭据库读取，找不到时再读环境变量或 `<DS
 | `index.chunkChars` / `index.overlapChars` | 1200 / 150 | 片段长度和片段间的重叠长度（字符） |
 | `index.maxFileBytes` / `index.maxFiles` | 20 MB / 20000 | 单个文件大小上限和文件数上限（纯文本文件另有 2 MB 上限） |
 | `search.topK` | 8 | 默认返回的片段数 |
-| `search.rerankCandidates` | 30 | 送去重排的候选数；本地模型嫌慢可以调到 15 |
+| `search.rerankCandidates` | 15 | 开启重排时送去重排的候选数。原为 30，现降到 15：30 个候选明显更慢 |
 | `search.refreshBeforeSearch` / `search.maxRefreshFiles` | `true` / 50 | 搜索前自动增量刷新，变化的文件超过上限时只给提示 |
 | `search.enforce` | `off` | 是否引导模型用 `knowledge_search` 查文档：`remind` 在模型 grep 文档后提醒一次；`docs` 在每轮第一次 grep 已索引的文档时拒绝并指向 `knowledge_search`；`prefetch` 对每条用户消息先检索，把文档命中附给模型。实测都没有比不引导更好，见下文「让模型用起来」 |
-| `search.instructions` | `true` | 工作区有语义索引时，插件像 DSH 加载 AGENTS.md 那样，给每个 agent 发一条路由规则：文档和换说法的问题先用 `knowledge_search`，代码用 grep。实测能让文档类问题更快、更省 |
+| `search.instructions` | `true` | 工作区有语义索引时，插件像 DSH 加载 AGENTS.md 那样，给 agent 发一条路由规则：文档和换说法的问题先用 `knowledge_search`，代码用 grep。上下文压缩把它挤掉后会重发。实测能让文档类问题更快、更省 |
 
 完整配置见 [src/config.ts](src/config.ts)。
 
@@ -128,7 +128,7 @@ Key 按凭据名从 DSH 凭据库读取，找不到时再读环境变量或 `<DS
 
 ### 让模型用起来
 
-在 DSH 里用 `deepseek-flash` 实测（RogueReborn 仓库，20 道题，每题跑 4 次，见 [eval/README.md](eval/README.md)）：
+在 DSH 里用 `deepseek-flash` 实测（RogueReborn 仓库，20 道题，每题跑 4 次；另在 TileFillerBoardGenerator 上复测了压缩后重发和重排，见 [eval/README.md](eval/README.md)）：
 
 - 只靠插件的系统提示词，模型几乎不调用 `knowledge_search`，40 次里只有 1–3 次。
 - 插件强制调用（`search.enforce: docs`）或预先附上命中（`prefetch`）都没有收益：模型搜完照样继续 grep。所以 `search.enforce` 默认关闭。
@@ -165,10 +165,10 @@ This workspace is indexed for semantic search. For any question about the docs (
 | 首次建索引 | 349 个文件切成 11205 个片段，用时 24.3 分钟（约 7.7 片段/秒、4300 字符/秒），0 错误 |
 | 索引大小 | 58 MB（向量 1024 维，加原文和 FTS 索引） |
 | 常驻内存 | embedding 进程约 1.7 GB，rerank 进程约 1.6 GB |
-| 单次查询（top 8） | 只做混合召回 31–176 ms；rerank 15 个候选 1.3–2.0 s；rerank 30 个候选（默认）2.8–3.8 s |
+| 单次查询（top 8） | 只做混合召回 31–176 ms；rerank 15 个候选 1.3–2.0 s；rerank 30 个候选 2.8–3.8 s |
 | 检索质量 | 5 个测试查询（中文 3 个、英文 2 个）开启 rerank 后，排第一的都是对应主题的章节，例如「工具调用前的审批是怎么实现的」命中 `subsystems/approval.zh.md` 的「审批请求」一节 |
 
-建索引只在第一次慢，之后只处理变化的文件。查询延迟基本都花在 rerank 上：嫌慢可以把 `search.rerankCandidates` 调到 15，或者在配置页把重排模型设为「不使用」，只用混合召回。
+建索引只在第一次慢，之后只处理变化的文件。查询延迟基本都花在 rerank 上，所以重排默认关闭，只用混合召回；开启后默认重排 15 个候选。评测里关掉重排没有降低准确率，反而更快。
 
 内存紧张时可以缩小批大小（配置项 `local.ctx: 2048`；内存小于 12 GB 的机器，配置页保存时会自动这样设置）。实测单个进程约 1.0 GB（4096 时约 1.25 GB）。插件送进模型的最长输入是 2400 字符，纯中文实测最多约 1.7k token，2048 足够。
 <!-- bench:end -->
