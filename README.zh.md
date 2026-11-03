@@ -20,7 +20,7 @@
 
 要求 DSH 0.2.1-rc.5 或更新（`engines.dsh: >=0.2.1-rc.5 <0.3.0`）。插件不依赖任何原生模块，安装时也不运行构建脚本。
 
-- **插件市场**：在 DSH 的插件页「发现」里添加索引源 `https://raw.githubusercontent.com/Tokiki17/dsh-qwen-rag/main/market/index.json`，然后安装「Qwen RAG 知识库」。
+- **插件市场**（推荐）：在 DSH 的插件页「发现」里添加索引源 `https://raw.githubusercontent.com/Tokiki17/dsh-qwen-rag/main/market/index.json`，然后安装「Qwen RAG 知识库」。
 - **命令行**：
 
   ```bash
@@ -33,7 +33,12 @@
   dsh plugin --profile desktop add link:/path/to/dsh-qwen-rag
   ```
 
-安装后插件会自动加入 profile 的 `dsh.profile.bundles`。如果 profile 没开 HMR，需要重启 DSH。
+用命令行安装前，有两点要注意：
+
+- `dsh` 命令默认不在 PATH 里。可以在 macOS 菜单栏「DeepSeek Harness → 管理 dsh 命令…」里安装它（会创建 `/usr/local/bin/dsh`），也可以直接用完整路径 `"/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh"`。
+- `desktop` profile 由 Desktop 自己创建。要先打开过一次 Desktop，并且在运行命令时把它完全退出；否则 `dsh` 会拒绝执行，并提示 “Open DeepSeek Harness Desktop once to initialize its profile, then fully quit it”。
+
+安装后插件会自动加入 profile 的 `dsh.profile.bundles`，重新打开 Desktop 即可生效。
 
 ## 配置
 

@@ -20,7 +20,7 @@ Research notes (Chinese): [docs/research.zh.md](docs/research.zh.md).
 
 You need DSH 0.2.1-rc.5 or newer (`engines.dsh: >=0.2.1-rc.5 <0.3.0`). The package has no native modules and runs no install scripts.
 
-- **Plugin market:** add `https://raw.githubusercontent.com/Tokiki17/dsh-qwen-rag/main/market/index.json` under Plugins → Discover, then install "Qwen RAG knowledge base".
+- **Plugin market (recommended):** add `https://raw.githubusercontent.com/Tokiki17/dsh-qwen-rag/main/market/index.json` under Plugins → Discover, then install "Qwen RAG knowledge base".
 - **CLI:**
 
   ```bash
@@ -32,6 +32,13 @@ You need DSH 0.2.1-rc.5 or newer (`engines.dsh: >=0.2.1-rc.5 <0.3.0`). The packa
   ```bash
   dsh plugin --profile desktop add link:/path/to/dsh-qwen-rag
   ```
+
+Before you use the CLI:
+
+- The `dsh` command is not on your PATH by default. Install it from the macOS menu bar with **DeepSeek Harness → Manage dsh Command…** (this creates `/usr/local/bin/dsh`), or run it by its full path, `"/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh"`.
+- Desktop creates the `desktop` profile itself. Open Desktop once, then quit it completely before you run the command; otherwise `dsh` refuses with "Open DeepSeek Harness Desktop once to initialize its profile, then fully quit it".
+
+The plugin is added to the profile's `dsh.profile.bundles`; reopen Desktop to load it.
 
 ## Configure
 
