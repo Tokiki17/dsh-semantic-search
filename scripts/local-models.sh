@@ -12,7 +12,10 @@
 #   QWEN_RAG_EMBED_GGUF / QWEN_RAG_RERANK_GGUF   use your own GGUF file paths instead
 #   QWEN_RAG_MODELS_DIR   default ~/.cache/dsh-qwen-rag/models
 #   QWEN_RAG_EMBED_PORT / QWEN_RAG_RERANK_PORT   default 8081 / 8082
-#   QWEN_RAG_CTX          per-server context and batch size, default 8192
+#   QWEN_RAG_CTX          per-server context and batch size, default 8192 (~1.6 GB RSS
+#                         per 0.6B server); 4096 ~1.25 GB, 2048 ~1.0 GB. Keep it at least
+#                         2048: the plugin's longest input (2 x index.chunkChars = 2400
+#                         chars) measured at most ~1.7k tokens, even for pure Chinese text
 set -eu
 
 # Homebrew llama.cpp 0.8.0 fails to compile its bfloat Metal shaders on macOS 15

@@ -87,16 +87,18 @@ Qwen-Agent 的做法是：
 
 ## 四、本地部署推荐配置
 
-| 机器 | 推荐组合 | 实测或估算的内存 |
+| 机器 | 推荐组合 | 内存（两个进程合计） |
 |---|---|---|
-| 8 GB Mac，或只有 CPU 的服务器 | Embedding-0.6B Q8_0 + Reranker-0.6B Q8_0 | 实测见下文 |
-| 16 GB Mac（本机 M4） | 默认 0.6B + 0.6B；追求质量可换 Embedding-4B Q4_K_M（`QWEN_RAG_EMBED_SIZE=4b`） | 4B embedding 估算约 3–4 GB |
-| 24–32 GB Mac | Embedding-4B + Reranker-4B（社区 GGUF） | 估算约 6–7 GB |
-| 32 GB 以上，或 12 GB 以上显存 | 8B 组合 | 估算 10 GB 以上 |
+| 8 GB Mac，或只有 CPU 的服务器 | Embedding-0.6B Q8_0 + Reranker-0.6B Q8_0，`QWEN_RAG_CTX=2048` | 实测约 2.0 GB |
+| 16 GB Mac（本机 M4） | 默认 0.6B + 0.6B（`QWEN_RAG_CTX=8192`）；追求质量可换 Embedding-4B Q4_K_M（`QWEN_RAG_EMBED_SIZE=4b`） | 0.6B 组合实测约 3.2 GB；换 4B embedding 估算约 5.5–6 GB |
+| 24–32 GB Mac | Embedding-4B + Reranker-4B（社区 GGUF） | 估算约 8–9 GB |
+| 32 GB 以上，或 12 GB 以上显存 | 8B 组合 | 估算 12 GB 以上 |
+
+0.6B 模型单个进程的常驻内存随批大小变化（本机 M4、llama.cpp 0.8.0 实测）：`-c/-b/-ub` 为 8192 时约 1.6 GB，4096 时约 1.25 GB，2048 时约 1.0 GB。插件送进模型的最长输入是 2 × `index.chunkChars` = 2400 字符；从 DSH 文档里抽样实测，纯中文最多约 1.7k token，所以 2048 已经够用。4B、8B 的数字是按权重大小加上随隐藏层变大的批缓冲推算的，没有实测。
 
 启动方式见 `scripts/local-models.sh`。
 
-- embedding 进程用 `--embedding --pooling last`，rerank 进程用 `--rerank --pooling rank`，两者都要加 `-c 8192 -b 8192 -ub 8192`。
+- embedding 进程用 `--embedding --pooling last`，rerank 进程用 `--rerank --pooling rank`，两者都要加 `-c N -b N -ub N`（脚本里由 `QWEN_RAG_CTX` 控制，默认 8192）。
 - 本机踩到的坑：Homebrew 的 llama.cpp 0.8.0 在 macOS 15 上编译 bfloat Metal 着色器会失败，报 `constexpr function never produces a constant expression`。设置 `GGML_METAL_BF16_DISABLE=1` 即可解决，脚本里已默认设置。
 
 本机实测数据在 [README.zh.md](../README.zh.md#本地后端实测)。

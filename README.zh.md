@@ -109,6 +109,7 @@ scripts/local-models.sh status
 | `index.maxFileBytes` / `index.maxFiles` | 20 MB / 20000 | 单个文件大小上限和文件数上限（纯文本文件另有 2 MB 上限） |
 | `index.excludeDirs` | `node_modules`、`.git`、`dist` 等 | 不扫描的目录名 |
 | `search.topK` | 8 | 默认返回的片段数 |
+| `search.rerankCandidates` | 30 | 送去 rerank 的候选数；本地后端嫌慢可以调到 15 |
 | `search.refreshBeforeSearch` / `search.maxRefreshFiles` | `true` / 50 | 搜索前自动增量刷新，变化的文件超过上限时只给提示 |
 
 完整配置见 [src/config.ts](src/config.ts)。
@@ -140,7 +141,19 @@ scripts/local-models.sh status
 ## 本地后端实测
 
 <!-- bench:begin -->
-待补充。
+测试环境：Apple M4、16 GB 内存、macOS 15.7，Homebrew llama.cpp 0.8.0，Qwen3-Embedding-0.6B Q8_0 + Qwen3-Reranker-0.6B Q8_0，`QWEN_RAG_CTX=8192`。语料是 DSH 源码仓库 `docs/` 下的 349 个 Markdown 文件，中英各半，共 620 万字符。测试用 `scripts/bench-local.ts`，测试日期 2026-11-03。
+
+| 项目 | 结果 |
+|---|---|
+| 首次建索引 | 349 个文件切成 11205 个片段，用时 24.3 分钟（约 7.7 片段/秒、4300 字符/秒），0 错误 |
+| 索引大小 | 58 MB（向量 1024 维，加原文和 FTS 索引） |
+| 常驻内存 | embedding 进程约 1.7 GB，rerank 进程约 1.6 GB |
+| 单次查询（top 8） | 只做混合召回 31–176 ms；rerank 15 个候选 1.3–2.0 s；rerank 30 个候选（默认）2.8–3.8 s |
+| 检索质量 | 5 个测试查询（中文 3 个、英文 2 个）开启 rerank 后，排第一的都是对应主题的章节，例如「工具调用前的审批是怎么实现的」命中 `subsystems/approval.zh.md` 的「审批请求」一节 |
+
+建索引只在第一次慢，之后只处理变化的文件。查询延迟基本都花在 rerank 上：嫌慢可以把 `search.rerankCandidates` 调到 15，或者直接设 `rerank: false`，只用混合召回。
+
+内存紧张时可以缩小批大小，例如 `QWEN_RAG_CTX=2048 scripts/local-models.sh start`。实测单个进程约 1.0 GB（4096 时约 1.25 GB）。插件送进模型的最长输入是 2400 字符，纯中文实测最多约 1.7k token，2048 足够。
 <!-- bench:end -->
 
 ## 开发

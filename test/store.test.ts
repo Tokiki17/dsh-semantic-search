@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
+import { statSync } from 'node:fs'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import { Store, toMatchExpression, toSearchText } from '../src/store.ts'
 import { denseTopK, reciprocalRankFusion } from '../src/retrieve.ts'
-import { hashVector } from './helpers.ts'
+import { hashVector, tempDir } from './helpers.ts'
 
 const chunk = (text: string, ord = 0) => ({ ord, text, startLine: 1, endLine: 1, heading: '', page: undefined })
 
@@ -58,4 +60,18 @@ test('dense top-k and reciprocal rank fusion order results', () => {
 
   const fused = reciprocalRankFusion([[1, 2, 3], [3, 1]])
   assert.deepEqual(fused.map((hit) => hit.id), [1, 3, 2])
+})
+
+test('database files are readable by the owner only', () => {
+  const dir = tempDir()
+  try {
+    const path = join(dir.path, 'nested', 'c.db')
+    const store = Store.open(path)
+    store.replaceFile('/r/a.md', 1, 10, 'h1', [{ chunk: chunk('secret notes'), vector: hashVector('secret notes') }])
+    for (const file of [path, `${path}-wal`]) assert.equal(statSync(file).mode & 0o777, 0o600, file)
+    assert.equal(statSync(join(dir.path, 'nested')).mode & 0o777, 0o700)
+    store.close()
+  } finally {
+    dir.cleanup()
+  }
 })

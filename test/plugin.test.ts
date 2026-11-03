@@ -106,6 +106,35 @@ test('registers four tools and a prompt section; tools run end to end', async ()
   assert.match(text(removed), /Deleted collection "workspace"/)
 })
 
+test('knowledge_index runs as a background job when the job service serves the agent', async () => {
+  const { ctx, tools } = await boot({ approval: 'never' })
+  const started: Array<{ kind: string; owner: unknown; progress: string[]; done: Promise<{ status: string; result?: string }> }> = []
+  ctx.provide('jobs', {
+    start(spec: { kind: string; owner: unknown; run(job: { updateProgress(line: string): void }): { done: Promise<{ status: string; result?: string }> } }) {
+      const progress: string[] = []
+      const { done } = spec.run({ updateProgress: (line) => progress.push(line) })
+      started.push({ kind: spec.kind, owner: spec.owner, progress, done })
+      return `job-${started.length}`
+    },
+  })
+  const result = await tools.execute({
+    callId: 'call-bg',
+    name: 'knowledge_index',
+    arguments: { target: 'workspace' },
+    signal: new AbortController().signal,
+    agent: { id: 'agent-1' },
+  })
+  assert.equal(result.isError, false, text(result))
+  assert.match(text(result), /started in the background as job job-1/)
+  assert.equal(started.length, 1)
+  assert.equal(started[0]!.kind, 'knowledge-index')
+  assert.equal(started[0]!.owner, 'agent-1')
+  const outcome = await started[0]!.done
+  assert.equal(outcome.status, 'completed')
+  assert.match(outcome.result ?? '', /2 added/)
+  assert.ok(started[0]!.progress.length > 0, 'progress lines reach the job')
+})
+
 test('knowledge_index asks for approval before running', async () => {
   const { call } = await boot({ approval: 'always' })
   const result = await call('knowledge_index', { target: 'workspace' })

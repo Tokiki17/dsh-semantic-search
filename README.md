@@ -49,6 +49,17 @@ Override the `qwen-rag` row in your profile's `cordis.patch.yml`.
 
 The other settings are `approval`, `rerank`, `storageDir`, and the `index.*` and `search.*` groups; see [src/config.ts](src/config.ts) and the Chinese README.
 
+## Local benchmark
+
+Measured on an Apple M4 (16 GB, macOS 15.7) with Homebrew llama.cpp 0.8.0, the two 0.6B Q8_0 models and `QWEN_RAG_CTX=8192`. The corpus was 349 Markdown files (6.2 M characters, half Chinese) from the DSH docs.
+
+- **First index:** 11,205 chunks in 24.3 min, about 7.7 chunks/s. Later runs only re-embed changed files.
+- **Index size:** 58 MB.
+- **Memory:** about 1.7 GB for the embedding server and 1.6 GB for the rerank server. With `QWEN_RAG_CTX=2048` each server uses about 1.0 GB.
+- **Query latency:** 31–176 ms with fusion only, 1.3–2.0 s when reranking 15 candidates, and 2.8–3.8 s when reranking 30 (the default). Set `search.rerankCandidates: 15` or `rerank: false` for faster answers.
+
+All five test queries returned the matching section first when rerank was on. Full numbers are in the Chinese README.
+
 ## Tools
 
 | Tool | Purpose |

@@ -290,9 +290,12 @@ export class KnowledgeBase {
     const topK = Math.max(1, Math.min(request.topK ?? this.options.search.topK, 50))
     const rows = loadRows(pool.slice(0, Math.max(topK, this.options.search.rerankCandidates)))
     const shortlist = pool.filter((candidate) => rows.has(candidate)).slice(0, Math.max(topK, this.options.search.rerankCandidates))
+    // Same cap as the embedding input, so one long-line chunk cannot overflow the reranker's context.
+    const docLimit = this.options.index.chunkChars * 2
     const docs = shortlist.map((candidate) => {
       const row = rows.get(candidate)!
-      return row.heading ? `${row.heading}\n${row.text}` : row.text
+      const body = row.text.length > docLimit ? row.text.slice(0, docLimit) : row.text
+      return row.heading ? `${row.heading}\n${body}` : body
     })
 
     let ranking: SearchResult['ranking'] = 'fusion'

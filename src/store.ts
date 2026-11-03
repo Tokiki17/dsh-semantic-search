@@ -3,7 +3,7 @@
  * carry their normalized embedding as a Float32 BLOB; a contentless FTS5
  * table holds a CJK-bigram projection of the same text for keyword recall.
  */
-import { mkdirSync } from 'node:fs'
+import { closeSync, mkdirSync, openSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import type { Chunk } from './chunk.ts'
@@ -75,7 +75,11 @@ export class Store {
   }
 
   static open(path: string): Store {
-    if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
+    if (path !== ':memory:') {
+      mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
+      // Create the file owner-only; SQLite gives its -wal/-shm files the same mode.
+      closeSync(openSync(path, 'a', 0o600))
+    }
     const db = new DatabaseSync(path)
     db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;')
     db.exec(SCHEMA)
