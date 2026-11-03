@@ -215,7 +215,11 @@ test('the setup service matches its typert manifest and saves drafts, keys and t
   const key = await service.setKey({ name: 'DASHSCOPE_API_KEY', value: ' sk-test ' })
   assert.deepEqual([key.configured, stored.get('DASHSCOPE_API_KEY')], [true, 'sk-test'])
   assert.equal(JSON.stringify(await service.getState()).includes('sk-test'), false, 'state never carries key values')
-  await assert.rejects(service.setKey({ name: 'DEEPSEEK_API_KEY', value: 'x' }), /not a key used by semantic search/)
+  stored.set('DEEPSEEK_API_KEY', 'sk-main')
+  await assert.rejects(service.setKey({ name: 'DEEPSEEK_API_KEY', value: 'x' }), /already holds a credential/)
+  assert.equal(stored.get('DEEPSEEK_API_KEY'), 'sk-main', 'another plugin\'s key is never overwritten')
+  assert.equal((await service.setKey({ name: 'MY_SERVICE_KEY', value: 'k' })).configured, true, 'a new custom key name can be created')
+  await assert.rejects(service.clearKey({ name: 'DEEPSEEK_API_KEY' }), /not a key used by semantic search/)
   assert.equal((await service.clearKey({ name: 'DASHSCOPE_API_KEY' })).configured, false)
 
   assert.equal(service.rebuildStale().status, 'done', 'nothing stale')

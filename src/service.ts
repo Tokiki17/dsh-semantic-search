@@ -163,11 +163,12 @@ export function createService(deps: ServiceDeps) {
     },
 
     async setKey(request: { name: string; value: string }): Promise<KeyStatus> {
-      const name = allowedKey(request.name)
       const value = request.value.trim()
       if (value === '') throw new Error('the key is empty')
       const store = credentials()
       if (store === undefined) throw new Error('DSH credentials are not available in this host')
+      // A name the saved config does not reference yet (a new custom service) may only be created, never overwritten.
+      const name = knownKey(request.name) ?? (await newKey(request.name, store))
       await store.set(name, value)
       const info = await store.describe(name)
       return { name, configured: info.configured, source: info.source, writable: info.writable }
@@ -220,11 +221,21 @@ export function createService(deps: ServiceDeps) {
     return deps.optional<ConfigEditor>('configEditor')?.entries().find((entry) => entry.options.id === ROW_ID)
   }
 
-  function allowedKey(name: string): string {
+  function knownKey(name: string): string | undefined {
     assertCredentialName(name)
-    // Only the key names this plugin's providers reference; the page cannot overwrite unrelated credentials.
-    const allowed = new Set([...keyNames(config), 'DASHSCOPE_API_KEY', 'SILICONFLOW_API_KEY'])
-    if (!allowed.has(name)) throw new Error(`"${name}" is not a key used by semantic search; set providers.*.apiKeyEnv first`)
+    return new Set([...keyNames(config), 'DASHSCOPE_API_KEY', 'SILICONFLOW_API_KEY']).has(name) ? name : undefined
+  }
+
+  function allowedKey(name: string): string {
+    // Only the key names this plugin's providers reference; the page cannot remove unrelated credentials.
+    const known = knownKey(name)
+    if (known === undefined) throw new Error(`"${name}" is not a key used by semantic search; set providers.*.apiKeyEnv first`)
+    return known
+  }
+
+  async function newKey(name: string, store: Credentials): Promise<string> {
+    const info = await store.describe(name)
+    if (info.configured || process.env[name]) throw new Error(`"${name}" already holds a credential used elsewhere; choose another name for this service`)
     return name
   }
 

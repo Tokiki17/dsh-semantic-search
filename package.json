@@ -1,6 +1,6 @@
 {
   "name": "@tokiki/dsh-semantic-search",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Semantic Search for DeepSeek Harness: hybrid keyword + embedding search with reranking over your workspace and document folders. Works with no model, local Qwen3 GGUF models the plugin downloads and runs, Alibaba Cloud Model Studio, SiliconFlow, or any OpenAI-compatible service.",
   "license": "MIT",
   "type": "module",
@@ -8,6 +8,7 @@
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
+    "./client": "./lib/client.js",
     "./typert": "./lib/typert.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./locale/*.json": "./locale/*.json",
@@ -44,7 +45,7 @@
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p src/client",
     "test": "node --test test/*.test.ts",
     "check": "npm run typecheck && npm test && npm run build"
   },
@@ -56,6 +57,9 @@
     "manifestVersion": 1,
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
     }
   },
   "peerDependencies": {
@@ -85,10 +89,12 @@
     "@deepseek-ai/dsh-tools": "0.2.1-rc.5",
     "@deepseek-ai/schemastery": "3.18.5",
     "@types/node": "24.19.2",
+    "@types/react": "18.3.12",
     "esbuild": "0.28.2",
     "ignore": "7.0.14",
     "jszip": "3.10.2",
     "mammoth": "1.13.0",
+    "react": "18.3.1",
     "typescript": "5.9.3",
     "unpdf": "2.1.0",
     "zod": "4.4.3"

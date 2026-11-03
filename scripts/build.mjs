@@ -21,6 +21,23 @@ const result = await build({
   banner: { js: "import { createRequire as __semanticSearchCreateRequire } from 'node:module'; const require = __semanticSearchCreateRequire(import.meta.url);" },
   logLevel: 'warning',
 })
+// Browser half: one CommonJS factory handed to DSH's module loader, which supplies react and the host packages.
+const client = await build({
+  entryPoints: ['src/client/index.tsx'],
+  outfile: 'lib/client.js',
+  bundle: true,
+  format: 'cjs',
+  platform: 'browser',
+  target: 'es2022',
+  jsx: 'automatic',
+  external: ['react', 'react/jsx-runtime', 'react-dom', '@deepseek-ai/*'],
+  legalComments: 'none',
+  metafile: true,
+  banner: { js: 'window.__ModuleLoader__.load({ id: "@tokiki/dsh-semantic-search", factory: (require) => { var module = { exports: {} }, exports = module.exports;' },
+  footer: { js: 'return module.exports } });' },
+  logLevel: 'warning',
+})
+Object.assign(result.metafile.outputs, client.metafile.outputs)
 const outputs = Object.entries(result.metafile.outputs).filter(([file]) => file.endsWith('.js'))
 for (const [file, info] of outputs) console.log(`${file}  ${(info.bytes / 1024).toFixed(1)} KiB`)
 
