@@ -1,0 +1,13 @@
+# Bundle layer for @tokiki/dsh-qwen-rag. Override the row by id in your
+# profile's cordis.patch.yml, e.g. to switch to the local llama-server backend:
+#
+# - id: qwen-rag
+#   config:
+#     backend: openai-compatible
+#     openaiCompatible:
+#       preset: local
+- insert:
+    - id: qwen-rag
+      name: '@tokiki/dsh-qwen-rag'
+      config:
+        backend: dashscope

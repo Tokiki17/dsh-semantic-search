@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Qwen RAG 知识库",
+    "description": "用 Qwen 向量与重排模型对工作区和文档文件夹做语义 + 关键词混合检索，可选阿里云百炼或本地 llama-server。"
+  }
+}
