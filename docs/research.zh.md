@@ -6,10 +6,12 @@
 
 DSH 0.2.1-rc.5 的内置包和官方按需目录里都没有 embedding、向量检索、rerank 或知识库能力。现有的检索只有三种：`grep`/`glob` 这类文件搜索、基于 SQLite FTS5 的会话历史搜索（`dsh-experimental-session-search`），以及 web 搜索。所以「对项目代码、文档和个人资料做语义检索」是空白，适合用插件补上。
 
-最合适的形态是原生 Cordis 工具插件，也就是本仓库的 `@tokiki/dsh-qwen-rag`：
+最合适的形态是原生 Cordis 工具插件，也就是本仓库的「语义检索」插件（0.2 起包名为 `@tokiki/dsh-semantic-search`，0.1 叫 `@tokiki/dsh-qwen-rag`；改名是因为插件并不绑定 Qwen，任何兼容接口的模型都能用）：
 
-- 检索：Qwen 系 embedding 加 SQLite FTS5 关键词召回，用 RRF 融合，再交给 Qwen 系 reranker 重排。
-- 后端二选一：阿里云百炼（DashScope），或 OpenAI 兼容服务（本地 llama-server、硅基流动等）。
+- 检索：embedding 向量召回加 SQLite FTS5 关键词召回，用 RRF 融合，再交给 reranker 重排。默认推荐 Qwen3 系模型。
+- 两个模型分开选来源：向量模型可选「不使用」（默认，只做关键词检索）、本地、阿里云百炼、硅基流动或自定义 OpenAI 兼容服务；重排模型默认沿用向量模型的来源。
+- 本地来源由插件自己下载 llama.cpp 预编译包和 GGUF 模型并管理 llama-server 进程，用户不需要装任何东西。
+- 配置走插件页里的分步配置页（网页端 `./client` + 宿主 RPC `./typert`），Key 存 DSH 凭据库。
 - 存储：DSH 自带 Node 24 的 `node:sqlite`，不需要任何原生依赖。插件管理器底层的 pnpm 11 默认拦截构建脚本，零原生依赖正好避开这个问题。
 - 和 DSH 的集成：审批（`tools/pre-execute` 返回 `ask`）、凭据（`ctx.credentials`）、后台任务（`ctx.jobs`）、插件市场（git 源索引）都走 DSH 自己的链路。
 
@@ -96,10 +98,14 @@ Qwen-Agent 的做法是：
 
 0.6B 模型单个进程的常驻内存随批大小变化（本机 M4、llama.cpp 0.8.0 实测）：`-c/-b/-ub` 为 8192 时约 1.6 GB，4096 时约 1.25 GB，2048 时约 1.0 GB。插件送进模型的最长输入是 2 × `index.chunkChars` = 2400 字符；从 DSH 文档里抽样实测，纯中文最多约 1.7k token，所以 2048 已经够用。4B、8B 的数字是按权重大小加上随隐藏层变大的批缓冲推算的，没有实测。
 
-启动方式见 `scripts/local-models.sh`。
+表里的 `QWEN_RAG_*` 是开发脚本 `scripts/local-models.sh` 的变量。0.2 起插件自己管理本地模型，对应的配置是 `embedding.model`（`qwen3-embedding-0.6b` / `-4b` / `-8b`）和 `local.ctx`；配置页在内存小于 12 GB 的机器上保存时会自动把 `local.ctx` 设为 2048。重排的本地模型只提供 0.6B，因为官方和 ggml-org 都没有发布 4B 的重排 GGUF。
 
-- embedding 进程用 `--embedding --pooling last`，rerank 进程用 `--rerank --pooling rank`，两者都要加 `-c N -b N -ub N`（脚本里由 `QWEN_RAG_CTX` 控制，默认 8192）。
-- 本机踩到的坑：Homebrew 的 llama.cpp 0.8.0 在 macOS 15 上编译 bfloat Metal 着色器会失败，报 `constexpr function never produces a constant expression`。设置 `GGML_METAL_BF16_DISABLE=1` 即可解决，脚本里已默认设置。
+插件管理本地模型的方式（`src/local/`）：
+
+- 运行时：固定使用 llama.cpp b11765 的官方预编译包（macOS arm64/x64、Linux x64/arm64、Windows x64/arm64 的 CPU/Metal 版本），按 sha256 校验后用系统 `tar` 解压（macOS 包里的 dylib 是符号链接，必须保留；Windows 10 起自带的 `tar.exe` 也能解 zip）。
+- 模型：下载前对 HuggingFace、hf-mirror、ModelScope 各发一次小的 Range 请求测速，按速度排序；下载写入 `.part` 文件并用 Range 续传，某个源出错或 30 秒无数据就换下一个源，完成后校验大小和 sha256。0.1 缓存目录 `~/.cache/dsh-qwen-rag/models/` 里大小吻合的文件直接复用。本机实测下载速度：ModelScope 约 4.5 MB/s，GitHub 约 1.5 MB/s，HuggingFace 约 0.8 MB/s，hf-mirror 约 0.6 MB/s。
+- 进程：第一次请求时启动，只监听 127.0.0.1 的随机端口，`/health` 通过后才使用；embedding 进程用 `--embedding --pooling last`，rerank 进程用 `--rerank --pooling rank`，两者都加 `-c N -b N -ub N`（N 即 `local.ctx`）。空闲超过 `local.idleStopMinutes`（默认 10 分钟）或插件卸载时停止。本机首次启动 0.6B 约 15–18 秒（含 Metal 初始化）。
+- 本机踩到的坑：Homebrew 的 llama.cpp 0.8.0 在 macOS 15 上编译 bfloat Metal 着色器会失败，报 `constexpr function never produces a constant expression`。设置 `GGML_METAL_BF16_DISABLE=1` 即可解决，插件启动进程时默认设置。
 
 本机实测数据在 [README.zh.md](../README.zh.md#本地后端实测)。
 
@@ -126,7 +132,7 @@ Qwen-Agent 的做法是：
 
 第三方的重排排行榜（agentset，测试方法未核实，不针对中文）上，Cohere Rerank 4 Pro 的 ELO 是 1629，Voyage rerank-2.5 是 1544，Qwen3-Reranker-8B 是 1473。但 Qwen 系在中文和代码场景的官方分数很高。对以中文为主的个人知识库，百炼或 Qwen3 系仍是首选。
 
-这些服务大多用 OpenAI 兼容的 `/embeddings` 加 Jina/Cohere 风格的 `/rerank` 接口，所以插件的 `openai-compatible` 后端能直接对接它们。内置的预设有 `local`（llama-server）和 `siliconflow`；其他服务用 `custom` 预设配置。
+这些服务大多用 OpenAI 兼容的 `/embeddings` 加 Jina/Cohere 风格的 `/rerank` 接口，所以插件能直接对接它们。内置的来源有 `local`、`dashscope` 和 `siliconflow`；其他服务用 `custom` 来源，填 `providers.custom.baseURL` 和模型名。插件不内置价格表，建索引前的审批提示只估算文件数和 token 数。
 
 ## 六、插件设计要点
 
@@ -144,12 +150,16 @@ Qwen-Agent 的做法是：
    - 不跟随符号链接。
    - 云端后端下，建索引前会走审批。
 7. **KV cache**：工具 schema 和提示词段都是静态的。集合列表不写进提示词，模型需要时调用 `knowledge_status` 获取。
+8. **只用关键词的模式**：没有向量模型时，片段照样切分并写入 FTS5，向量列为空，集合的 embedder 标识记为 `keyword-only`。之后加了向量模型，这些集合被标为过期，但仍按关键词检索并提示重建；反过来，用某个模型建的集合在模型不可比时也只走关键词检索，不会拿不同模型的向量比较。
+9. **配置页**：网页端在插件页的 `plugins.bundle.config` slot 里渲染三步配置页，通过 `ctx.remote.$mount` 挂载 `semanticSearch` 命名空间调用宿主服务（`src/service.ts`，清单在 `src/typert.ts`）。保存走 DSH 的 `configEditor.edit`，写进 profile 的 `cordis.patch.yml` 并热重载插件；Key 走 `credentials.set`，配置页只能写本插件引用的凭据名，或者一个还没被占用的新名字，不能覆盖其他插件的凭据。
 
 ## 七、已知限制
 
 - 向量检索是暴力扫描，向量常驻内存。例如 5 万个片段、1024 维约占 200 MB。更大的语料需要换 sqlite-vec 或 int8 量化，目前未实现。
 - 扫描版 PDF 没有 OCR；`.doc`、`.pptx`、`.xlsx` 暂不支持。
 - 后台建索引依赖 DSH 的 jobs 服务；进程退出后任务不会续跑，但已经写入的文件会保留，下次运行增量补齐。
+- 网页端接口（slots、`remote.$mount`、`configEditor`、typert 清单）没有正式文档，是参照官方和社区插件写的，DSH 升级可能需要跟着调整，所以 `engines.dsh` 限定在 `<0.3.0`。
+- 本地模型只在 macOS（Apple M4）上实测过；Linux 和 Windows 的预编译包已接入但未实机验证。
 - 搜索前的自动刷新在云端后端下也会上传变化的文件内容。这个集合在首次建索引时已经批准过；如需关闭，设置 `search.refreshBeforeSearch: false`。
 
 ## 来源

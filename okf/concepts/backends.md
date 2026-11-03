@@ -1,14 +1,17 @@
 ---
 type: Configuration Reference
-title: Embedding and rerank backends
-description: The two selectable backends, their presets, and where their configuration and sizing guidance live.
+title: Model sources and local models
+description: How the embedding and rerank sources are chosen, their defaults, and how the plugin manages local llama.cpp models.
 generated:
   by: process:doc-sync
-  at: 2026-11-03T14:44:13+08:00
+  at: 2026-11-03T17:11:17+08:00
 sources:
   - id: config
     resource: ../../src/config.ts
-    title: Config schema and presets
+    title: Config schema and source resolution
+  - id: local
+    resource: ../../src/local/catalog.ts
+    title: Pinned llama.cpp and model catalog
   - id: readme-zh
     resource: ../../README.zh.md
     title: Chinese README, configuration section
@@ -17,17 +20,20 @@ sources:
     title: Research report, sections 2, 4 and 5
 ---
 
-# Embedding and rerank backends
+# Model sources and local models
 
-`backend` selects one of two implementations:[^config]
+The two model roles are configured separately:[^config]
 
-- `dashscope` (default): Alibaba Cloud Model Studio native endpoints with `qwen3.7-text-embedding` and `qwen3.7-text-rerank`, query/document typing and instructions. The key comes from the credential named by `dashscope.apiKeyEnv`.
-- `openai-compatible`: `/embeddings` plus a Jina/Cohere-style `/rerank`. Presets are `local` (llama-server on `127.0.0.1:8081` and `:8082`, started by [scripts/local-models.sh](../../scripts/local-models.sh)), `siliconflow` (Qwen3 4B models), and `custom`.
+- `embedding.source`: `none` (default, keyword search only), `local`, `dashscope`, `siliconflow` or `custom`.
+- `rerank.source`: `same` (default, follows the embedding source and is off when that is `none`), `off`, or one of the four model sources. A `custom` service without `rerank.model` leaves reranking off when followed implicitly.
 
-A backend is treated as remote unless its embedding URL is a loopback address; remote backends trigger the indexing approval under the default `approval: remote`.
+`dashscope` uses the native Model Studio endpoints (query/document typing and instructions); the other sources use OpenAI-compatible `/embeddings` and Jina/Cohere-style `/rerank`. A role counts as remote unless its URL is a loopback address; the local source always is. Keys are read by credential name (`providers.*.apiKeyEnv`) from DSH credentials, then the environment.
 
-Configuration examples and the parameter table are maintained in the Chinese README.[^readme-zh] Model scores, per-machine local sizing, and other providers are maintained in the research report;[^research] measured local resource use is in the README's local benchmark section.
+For `local`, the plugin downloads a pinned llama.cpp release and the Qwen3 GGUF models (0.6B/4B/8B embedding, 0.6B rerank) with sha256 checks, resumable downloads and mirror ranking, reuses complete files from the 0.1 cache, and starts llama-server per role on demand with an idle stop.[^local] Its embedder id matches the 0.1 local preset, so 0.1 local indexes stay valid.
 
-[^config]: Config schema and presets
+Defaults, the parameter table and examples are maintained in the Chinese README.[^readme-zh] Model scores, local sizing and other providers are in the research report.[^research]
+
+[^config]: Config schema and source resolution
+[^local]: Pinned llama.cpp and model catalog
 [^readme-zh]: Chinese README, configuration section
 [^research]: Research report, sections 2, 4 and 5
