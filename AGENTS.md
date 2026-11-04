@@ -1,6 +1,6 @@
 # dsh-semantic-search
 
-A DeepSeek Harness (DSH) plugin bundle, "Semantic Search" (`@tokiki/dsh-semantic-search`, renamed from `@tokiki/dsh-qwen-rag` in 0.2): hybrid keyword + embedding + rerank search over the workspace and named collections, with a web setup page and plugin-managed local llama.cpp models. User docs: [README.md](README.md) / [README.zh.md](README.zh.md); design and research: [docs/research.zh.md](docs/research.zh.md) (next direction, conversation memory: §9); project knowledge: [okf/index.md](okf/index.md).
+A DeepSeek Harness (DSH) plugin bundle, "Semantic Search" (`@tokiki/dsh-semantic-search`, renamed from `@tokiki/dsh-qwen-rag` in 0.2): hybrid keyword + embedding + rerank search over the workspace and named collections, with a web setup page and plugin-managed local llama.cpp models. User docs: [README.md](README.md) / [README.zh.md](README.zh.md); design and research: [docs/research.zh.md](docs/research.zh.md) (product direction and roadmap, a retrieval-augmented context layer: §9); project knowledge: [okf/index.md](okf/index.md).
 
 ## Layout
 
