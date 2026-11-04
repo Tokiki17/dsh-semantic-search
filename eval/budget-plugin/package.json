@@ -1,0 +1,10 @@
+{
+  "name": "eval-tool-budget",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Evaluation only: refuse tool calls after EVAL_TOOL_BUDGET calls per agent.",
+  "type": "module",
+  "main": "index.js",
+  "exports": { ".": "./index.js", "./cordis.patch.yml": "./cordis.patch.yml", "./package.json": "./package.json" },
+  "dsh": { "manifestVersion": 1, "bundle": { "patch": "./cordis.patch.yml" } }
+}

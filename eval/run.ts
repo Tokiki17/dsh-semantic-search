@@ -17,8 +17,14 @@
  *   R15, R30  eval-r15 / eval-r30: R with rerank on, 15 or 30 candidates
  *   CR, CI1, CJ  eval-cr / eval-ci1 / eval-cj: compaction forced at ~31k tokens; R, the
  *     instructions rule as released in fc04142 (sent once), and the current one (re-sent)
- *   (Every config whose name starts with R or CR gets $DSH_AGENTS_HOME_R.)
+ *   XA, XR, XRR  eval-xa / eval-xr / eval-xrr: A, R and R with rerank (15 candidates), each with
+ *     the eval-only tool budget plugin (eval/budget-plugin, EVAL_TOOL_BUDGET=<n>; 0 = closed book)
+ *   (Every config whose name starts with R, CR or XR gets $DSH_AGENTS_HOME_R.)
  *   (Q and R pin search.enforce: off, so they match the build they were measured with.)
+ *
+ * Agents can read the whole disk, including the answer keys in eval/ and past transcripts.
+ * Run DSH through a sandbox that only exposes the corpus (see eval/README.md, "Isolation"):
+ * AGENT_BIN=<wrapper that runs dsh under sandbox-exec>.
  *
  *   node eval/run.ts <repo> <out-dir> [--harness codex|claude|dsh] [--reps N] [--jobs N] [--model M] [--effort E] [--only A1,B2] [--configs A,B]
  *
@@ -126,7 +132,7 @@ const runOne = (job: Job) => new Promise<void>((done) => {
         prompt,
       ]
   const started = Date.now()
-  const env = /^C?R/.test(job.config) && process.env.DSH_AGENTS_HOME_R ? { ...process.env, DSH_AGENTS_HOME: process.env.DSH_AGENTS_HOME_R } : process.env
+  const env = /^(C|X)?R/.test(job.config) && process.env.DSH_AGENTS_HOME_R ? { ...process.env, DSH_AGENTS_HOME: process.env.DSH_AGENTS_HOME_R } : process.env
   const child = spawn(BIN, args, { cwd: repo, env, stdio: ['ignore', 'pipe', 'pipe'] })
   let out = ''
   let err = ''

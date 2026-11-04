@@ -4,7 +4,7 @@ title: Verification status
 description: What has been verified for 0.2.0 (and earlier for 0.1.0), how, and what is still pending.
 generated:
   by: process:doc-sync
-  at: 2026-11-03T21:30:00+08:00
+  at: 2026-11-04T13:30:00+08:00
 sources:
   - id: eval
     resource: ../../eval/README.md
@@ -19,7 +19,7 @@ sources:
 
 # Verification status
 
-State as of 2026-11-03, DSH 0.2.1-rc.5.
+State as of 2026-11-04, DSH 0.2.1-rc.5.
 
 ## Verified for 0.2.0
 
@@ -44,7 +44,12 @@ A second repository (TileFillerBoardGenerator, DSH, baseline: the `AGENTS.md` ru
 - Rerank on made doc-fact questions 1.5× (15 candidates) to 2.0× (30) slower with no accuracy gain; rerank is now off by default (`rerank.source: off`) and `search.rerankCandidates` defaults to 15 when it is on.
 - Concurrent store opens could fail with `database is locked`; fixed by setting `busy_timeout` before switching to WAL (covered by a 12-process test).
 
-Not covered: Claude Code (its CLI was not logged in on this machine), harder questions, and DSH models other than `deepseek-flash`.
+Accuracy on two large corpora (2026-11-04, DSH, agent sandboxed so it cannot read answer keys): Kubernetes docs (3,414 files, 53k chunks) and 14 Chinese novels (2.2M characters), 20 questions each, with an eval-only tool budget:[^eval]
+- Unlimited tool calls: grep alone (XA), the plugin (XR) and the plugin with rerank (XRR) all scored 1.000 on both corpora.
+- At 5 tool calls: XA 0.950 / 0.892 (novels / K8s), XR 0.968 / 0.939, XRR 0.988 / 0.953; only XRR on K8s is significantly ahead of XA. Rerank took about 2.5× XA's time on the novels and about the same on K8s.
+- The first, unsandboxed closed-book screening read the answer keys and was discarded; earlier repositories had 1 such run in 825.
+
+Not covered: Claude Code (its CLI was not logged in on this machine), embedding models larger than 0.6B, and DSH models other than `deepseek-flash`.
 
 ## Verified for 0.1.0 (historical)
 
@@ -57,6 +62,7 @@ Not covered: Claude Code (its CLI was not logged in on this machine), harder que
 - A real model session in DSH that calls the tools: needs a DeepSeek login or `DEEPSEEK_API_KEY` in the test profile.
 - The setup page's background rebuild of stale collections in a live host, background indexing through DSH's real jobs service, and installation through the Desktop plugin-market UI.
 - Local runtime on Linux and Windows hardware.
+- GPU/NPU builds for Windows and Linux x64: the catalog pins only llama.cpp's CPU builds there (`win-cpu-x64`, `ubuntu-x64`). Release b11765 also ships Vulkan, SYCL (Intel GPU), OpenVINO (Intel CPU/GPU/NPU), CUDA and ROCm builds. Plan: add Vulkan with sizes and sha256 in `src/local/catalog.ts`, try it first and fall back to CPU, and offer SYCL/OpenVINO as an acceleration choice on the setup page. Needs real hardware, e.g. a 64 GB Intel Core Ultra (358H-class) laptop; whether OpenVINO runs the embedding and rerank models on the NPU is unverified.
 - The 0.2.0 release itself: repository rename, tag, market index, npm publish and the dshopen listing.
 
 [^tests]: node --test suite

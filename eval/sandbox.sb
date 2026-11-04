@@ -1,0 +1,30 @@
+(version 1)
+(allow default)
+; Evaluation sandbox for DSH headless (eval/sbx-dsh.sh). The agent may read its corpus,
+; DSH's own files and the plugin build, and nothing that holds questions, answers or
+; past results: eval/ (answer keys, runs), the docs that report results, other
+; scratch folders and the coding agents' transcripts. It may write only to DSH_HOME
+; and the index store.
+(deny file-read-data (subpath (param "DOCUMENTS")))
+(allow file-read-data (subpath (param "REPO")))
+(deny file-read-data
+  (subpath (string-append (param "REPO") "/eval"))
+  (subpath (string-append (param "REPO") "/docs"))
+  (subpath (string-append (param "REPO") "/okf"))
+  (subpath (string-append (param "REPO") "/test"))
+  (subpath (string-append (param "REPO") "/src"))
+  (subpath (string-append (param "REPO") "/.git"))
+  (subpath (string-append (param "REPO") "/market"))
+  (regex (string-append "^" (param "REPO") "/[^/]*\\.md$")))
+(allow file-read-data
+  (subpath (string-append (param "REPO") "/eval/budget-plugin"))
+  (subpath (param "STORE")))
+(deny file-read-data
+  (subpath (string-append (param "HOME") "/.claude"))
+  (subpath (string-append (param "HOME") "/.codex"))
+  (subpath (string-append (param "HOME") "/.agents"))
+  (subpath (string-append (param "HOME") "/Library/Application Support/Claude"))
+  (subpath (param "SCRATCH")))
+(allow file-read-data (subpath (param "DSH_HOME")) (subpath (param "AGENTS")) (subpath (param "CORPUS")))
+(deny file-write* (subpath (param "HOME")) (subpath (param "SCRATCH")))
+(allow file-write* (subpath (param "DSH_HOME")) (subpath (param "STORE")))

@@ -4,7 +4,7 @@ title: Coverage manifest
 description: Maps each project concern to its authoritative source, OKF concept, status and known gaps.
 generated:
   by: process:doc-sync
-  at: 2026-11-03T21:30:00+08:00
+  at: 2026-11-04T14:00:00+08:00
 ---
 
 # Coverage manifest
@@ -17,6 +17,8 @@ generated:
 | Model choice, local sizing, other providers | [docs/research.zh.md](../../docs/research.zh.md) §2, §4, §5 | [Model sources](backends.md) | current | 4B/8B local sizes are estimates, not measured |
 | Measured local performance | [README.zh.md](../../README.zh.md) local benchmark section | [Verification status](verification-status.md) | historical (0.1, Homebrew llama.cpp) | not re-measured with the bundled b11765 runtime |
 | Whether models use the tool; search steering | [eval/README.md](../../eval/README.md), [src/enforce.ts](../../src/enforce.ts), [docs/research.zh.md](../../docs/research.zh.md) §8 | [Architecture](architecture.md), [Verification status](verification-status.md) | current (unreleased) | Claude Code and models other than deepseek-flash not measured |
+| Accuracy on large corpora (grep vs semantic search) | [eval/README.md](../../eval/README.md) | [Verification status](verification-status.md) | current (unreleased) | one model; 0.6B embedding only |
+| Product direction: conversation memory | [docs/research.zh.md](../../docs/research.zh.md) §9 | [Next direction](direction.md) | planned, not implemented | no prototype or measurement yet |
 | What has and has not been verified | — | [Verification status](verification-status.md) | current | cloud sources and a real model session are pending |
 | Build, test, release commands and repo rules | [AGENTS.md](../../AGENTS.md) | — | current | — |
 | Market and npm distribution | [scripts/market-index.mjs](../../scripts/market-index.mjs), [market/index.json](../../market/index.json) | [Verification status](verification-status.md) | 0.1.0 published; 0.2.0 pending release | npm publish and dshopen listing pending |

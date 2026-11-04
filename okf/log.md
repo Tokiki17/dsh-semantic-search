@@ -1,5 +1,10 @@
 # Update log
 
+## 2026-11-04
+
+- Accuracy evaluation on Kubernetes docs and Chinese novels, with an eval-only tool budget plugin and a `sandbox-exec` wrapper that hides answer keys from the agent (`eval/budget-plugin`, `eval/sandbox.sb`, `eval/sbx-dsh.sh`, `eval/cite.ts`). Updated the verification concept.
+- Recorded the next direction, conversation memory (raw-turn retrieval over past sessions and compacted context), with its evidence: our accuracy evaluation and the community memory benchmark. Added the direction concept and coverage rows.
+
 ## 2026-11-03
 
 - Second-repository evaluation (TileFillerBoardGenerator, baseline R): `search.instructions` now re-sends the rule when compaction removes it; rerank is off by default and `search.rerankCandidates` defaults to 15; `Store.open` sets `busy_timeout` before WAL. Updated the architecture and verification concepts.

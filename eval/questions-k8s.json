@@ -1,0 +1,151 @@
+{
+  "repo": "kubernetes/website at 8f6d976, content/en/docs + content/zh-cn/docs (sparse checkout)",
+  "categories": {
+    "exact": "题面给出特性门控名或字段名，grep 能直接命中",
+    "paraphrase": "只描述功能，不给名称",
+    "detail": "需要读到原文细节（版本、默认值、步骤）",
+    "absent": "文档里没有的东西，正确答案是指出没有"
+  },
+  "questions": [
+    {
+      "id": "K01", "category": "exact",
+      "question": "特性门控 `MutableCSINodeAllocatableCount` 各阶段分别从哪个 Kubernetes 版本开始，默认值是什么？哪个版本 GA？",
+      "files": ["content/en/docs/reference/command-line-tools-reference/feature-gates/MutableCSINodeAllocatableCount.md"],
+      "keypoints": [["1.33"], ["1.34"], ["1.35"], ["1.36"]],
+      "reference": "alpha 1.33（默认 false）；beta 1.34（默认 false）；beta 1.35（默认 true）；stable 1.36。"
+    },
+    {
+      "id": "K02", "category": "paraphrase",
+      "question": "有个特性允许在容器的重启规则里指定一个动作：某个容器退出命中规则时，整个 Pod 原地终止并重启所有容器。这个特性门控叫什么？哪个版本进入 beta 并默认开启？它依赖哪两个门控？",
+      "files": ["content/en/docs/reference/command-line-tools-reference/feature-gates/RestartAllContainersOnContainerExits.md"],
+      "keypoints": [["RestartAllContainersOnContainerExits"], ["1.36"], ["ContainerRestartRules"], ["NodeDeclaredFeatures"]],
+      "reference": "RestartAllContainersOnContainerExits：alpha 1.35，beta 1.36 默认开启；依赖 ContainerRestartRules 和 NodeDeclaredFeatures，否则 kubelet 可能启动失败。"
+    },
+    {
+      "id": "K03", "category": "paraphrase",
+      "question": "镜像已经在节点上时，kubelet 仍然要核实新 Pod 是否有权用它提供的凭据使用这个镜像。控制这个行为的特性门控叫什么？哪个版本 alpha、哪个版本 beta？",
+      "files": ["content/en/docs/reference/command-line-tools-reference/feature-gates/KubeletEnsureSecretPulledImages.md"],
+      "keypoints": [["KubeletEnsureSecretPulledImages"], ["1.33"], ["1.35"]],
+      "reference": "KubeletEnsureSecretPulledImages：alpha 1.33–1.34（默认 false），beta 1.35（默认 true）。"
+    },
+    {
+      "id": "K04", "category": "paraphrase",
+      "question": "在 Pod 级别（而不只是逐个容器）设置资源 requests 和 limits 的能力，对应哪个特性门控？从哪个版本 beta 并默认开启？",
+      "files": ["content/en/docs/reference/command-line-tools-reference/feature-gates/PodLevelResources.md"],
+      "keypoints": [["PodLevelResources"], ["1.34"]],
+      "reference": "PodLevelResources：alpha 1.32–1.33，beta 1.34 默认 true。"
+    },
+    {
+      "id": "K05", "category": "absent",
+      "question": "特性门控 `PodAutoRightsizing` 是在哪个版本 GA 的？",
+      "files": [],
+      "keypoints": [["没有", "沒有", "不存在", "找不到", "未找到", "并无", "无此", "not exist", "no such", "doesn't exist", "does not exist"]],
+      "reference": "文档里没有 PodAutoRightsizing 这个门控；正确答案应指出不存在。"
+    },
+    {
+      "id": "K06", "category": "detail",
+      "question": "Pod 因为容器退出规则被原地重启所有容器时，preStop 钩子会执行吗？terminationGracePeriodSeconds 会生效吗？Pod 的 IP 和 UID 会变吗？",
+      "files": ["content/en/docs/concepts/workloads/pods/pod-lifecycle.md"],
+      "keypoints": [["preStop"], ["不会", "不执行", "不生效", "not", "不遵守", "忽略"], ["IP"], ["UID"]],
+      "reference": "pod-lifecycle.md:502 起：快速终止，不遵守 terminationGracePeriodSeconds，不执行 preStop；保留 Pod UID、IP、网络命名空间、sandbox、设备和所有卷（含 emptyDir）。"
+    },
+    {
+      "id": "K07", "category": "detail",
+      "question": "Pod 原地重启所有容器的过程中，Pod 状态里会出现哪个 condition？它的值先后如何变化？",
+      "files": ["content/en/docs/concepts/workloads/pods/pod-lifecycle.md"],
+      "keypoints": [["PodRestartInPlace"], ["True"], ["False"]],
+      "reference": "pod-lifecycle.md：PodRestartInPlace 先设为 True；所有容器终止后设为 False，再走正常启动流程（init 容器按序重跑）。"
+    },
+    {
+      "id": "K08", "category": "paraphrase",
+      "question": "对已经在节点上的镜像，kubelet 什么时候要重新核验拉取凭据由一个配置字段控制。这个字段叫什么？默认取值是什么？一共有哪几个取值？",
+      "files": ["content/en/docs/concepts/containers/images.md"],
+      "keypoints": [["imagePullCredentialsVerificationPolicy"], ["NeverVerifyPreloadedImages"], ["AlwaysVerify"], ["NeverVerifyAllowListedImages"]],
+      "reference": "images.md:429–442：imagePullCredentialsVerificationPolicy；NeverVerify、NeverVerifyPreloadedImages（默认）、NeverVerifyAllowListedImages、AlwaysVerify。"
+    },
+    {
+      "id": "K09", "category": "detail",
+      "question": "kubelet 配置里，列出哪些预加载镜像可以免于凭据核验的那个名单字段叫什么？它配合哪个策略取值使用？",
+      "files": ["content/en/docs/concepts/containers/images.md"],
+      "keypoints": [["preloadedImagesVerificationAllowlist"], ["NeverVerifyAllowListedImages"]],
+      "reference": "images.md:439–440：preloadedImagesVerificationAllowlist，配合 NeverVerifyAllowListedImages。"
+    },
+    {
+      "id": "K10", "category": "paraphrase",
+      "question": "想让 API server 一启动就从磁盘上的静态清单文件加载准入 webhook 和基于 CEL 的准入策略，etcd 不可用时也照样生效。这是哪个特性门控？配置字段叫什么？哪个版本 alpha、哪个版本 beta？",
+      "files": ["content/en/docs/reference/command-line-tools-reference/feature-gates/ManifestBasedAdmissionControlConfig.md"],
+      "keypoints": [["ManifestBasedAdmissionControlConfig"], ["staticManifestsDir"], ["1.36"], ["1.37"]],
+      "reference": "ManifestBasedAdmissionControlConfig：AdmissionConfiguration 的 staticManifestsDir 字段；alpha 1.36，beta 1.37（默认 true）。"
+    },
+    {
+      "id": "K11", "category": "paraphrase",
+      "question": "有个特性让 PVC 保护控制器记录 PVC 当前是否被非终止状态的 Pod 引用，以及它从什么时候开始不再被使用。这个 condition 叫什么？时间记录在哪个字段？对应的特性门控是什么？",
+      "files": ["content/en/docs/reference/command-line-tools-reference/feature-gates/PersistentVolumeClaimUnusedSinceTime.md"],
+      "keypoints": [["Unused"], ["lastTransitionTime"], ["PersistentVolumeClaimUnusedSinceTime"]],
+      "reference": "PersistentVolumeClaimUnusedSinceTime（alpha 1.36，beta 1.37）：condition Unused，lastTransitionTime 记录转换时间。"
+    },
+    {
+      "id": "K12", "category": "exact",
+      "question": "`KubeletPSI` 是做什么的？哪个版本 alpha、beta，哪个版本 GA？",
+      "files": ["content/en/docs/reference/command-line-tools-reference/feature-gates/KubeletPSI.md"],
+      "keypoints": [["PSI", "Pressure Stall"], ["1.33"], ["1.34"], ["1.36"]],
+      "reference": "让 kubelet 在 Summary API 和 Prometheus 指标中提供 PSI（Pressure Stall Information）；alpha 1.33，beta 1.34，stable 1.36。"
+    },
+    {
+      "id": "K13", "category": "paraphrase",
+      "question": "让 kube-controller-manager 在换主时主动释放选主锁、而不是等锁的 TTL 过期的特性门控叫什么？哪个版本引入？",
+      "files": ["content/en/docs/reference/command-line-tools-reference/feature-gates/ControllerManagerReleaseLeaderElectionLockOnExit.md"],
+      "keypoints": [["ControllerManagerReleaseLeaderElectionLockOnExit"], ["1.36"]],
+      "reference": "ControllerManagerReleaseLeaderElectionLockOnExit：alpha 1.36，默认 false。"
+    },
+    {
+      "id": "K14", "category": "paraphrase",
+      "question": "kubelet 列出容器、Pod 沙箱和镜像时改用服务端流式 RPC、让容器运行时分批返回结果，这个特性门控叫什么？对应的流式 RPC 至少举出两个名字。",
+      "files": ["content/en/docs/reference/command-line-tools-reference/feature-gates/CRIListStreaming.md"],
+      "keypoints": [["CRIListStreaming"], ["StreamContainers"], ["StreamPodSandboxes"]],
+      "reference": "CRIListStreaming（alpha 1.36）：ListContainers/ListPodSandbox/ListImages 改用 StreamContainers、StreamPodSandboxes 等流式 RPC。"
+    },
+    {
+      "id": "K15", "category": "exact",
+      "question": "`ConstrainedImpersonation` 是什么？哪个版本 alpha，哪个版本 beta？",
+      "files": ["content/en/docs/reference/command-line-tools-reference/feature-gates/ConstrainedImpersonation.md"],
+      "keypoints": [["1.35"], ["1.36"], ["impersonat", "伪装", "模拟", "扮演", "代入"]],
+      "reference": "把 impersonation 限定到具体请求而不是全有或全无；alpha 1.35，beta 1.36（默认 true）。"
+    },
+    {
+      "id": "K16", "category": "absent",
+      "question": "kubelet 配置字段 `imagePullCredentialsCacheTTL` 的默认值是多少？",
+      "files": [],
+      "keypoints": [["没有", "沒有", "不存在", "找不到", "未找到", "并无", "无此", "not exist", "no such", "doesn't exist", "does not exist"]],
+      "reference": "文档里没有 imagePullCredentialsCacheTTL；正确答案应指出不存在。"
+    },
+    {
+      "id": "K17", "category": "detail",
+      "question": "Pod 原地重启所有容器时，之前已经成功退出的容器也会重启吗？init 容器会重新运行吗？这个动作和容器或 Pod 上配置的 restartPolicy 谁优先？",
+      "files": ["content/en/docs/concepts/workloads/pods/pod-lifecycle.md"],
+      "keypoints": [["会", "all", "全部", "所有"], ["init"], ["覆盖", "优先", "override"]],
+      "reference": "pod-lifecycle.md：所有容器都会重启，包括已成功或失败退出的；init 容器按顺序重跑；RestartAllContainers 覆盖容器级和 Pod 级 restartPolicy。"
+    },
+    {
+      "id": "K18", "category": "paraphrase",
+      "question": "client-go 里有个 FIFO 队列实现，用原子操作让 ListAndWatch 这类成批到来的事件作为一个整体处理。这个特性门控叫什么？哪个版本、什么阶段、默认值是什么？",
+      "files": ["content/en/docs/reference/command-line-tools-reference/feature-gates/AtomicFIFO.md"],
+      "keypoints": [["AtomicFIFO"], ["1.36"], ["beta", "Beta"]],
+      "reference": "AtomicFIFO：1.36 beta，默认 true。"
+    },
+    {
+      "id": "K19", "category": "paraphrase",
+      "question": "在 DRA（动态资源分配）里，用来查询资源池中设备可用情况的那个 API 对象叫什么？由哪个特性门控开启，哪个版本？",
+      "files": ["content/en/docs/concepts/resource-management/dynamic-resource-allocation/dra-observability.md", "content/en/docs/reference/command-line-tools-reference/feature-gates/DRAResourcePoolStatus.md"],
+      "keypoints": [["ResourcePoolStatusRequest"], ["DRAResourcePoolStatus"], ["1.36"]],
+      "reference": "ResourcePoolStatusRequest，由 DRAResourcePoolStatus 开启（alpha 1.36，默认 false）。"
+    },
+    {
+      "id": "K20", "category": "detail",
+      "question": "`PodLevelResources` 和 `KubeletEnsureSecretPulledImages` 这两个特性门控，谁先进入 beta？各自是哪个版本？",
+      "files": ["content/en/docs/reference/command-line-tools-reference/feature-gates/PodLevelResources.md", "content/en/docs/reference/command-line-tools-reference/feature-gates/KubeletEnsureSecretPulledImages.md"],
+      "keypoints": [["PodLevelResources"], ["1.34"], ["1.35"]],
+      "reference": "PodLevelResources 1.34 先 beta；KubeletEnsureSecretPulledImages 1.35 beta。"
+    }
+  ]
+}

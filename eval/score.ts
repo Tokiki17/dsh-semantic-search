@@ -84,7 +84,7 @@ const summarize = (subset: Row[]) => ({
 })
 
 const groups: Record<string, Record<string, ReturnType<typeof summarize>>> = {}
-for (const category of ['A', 'B', 'C', 'D', 'all']) {
+for (const category of [...new Set(questions.map((q) => q.category)), 'all']) {
   for (const config of [...new Set(rows.map((r) => r.config))]) {
     const subset = rows.filter((r) => r.config === config && (category === 'all' || r.category === category))
     ;(groups[category] ??= {})[config] = summarize(subset)

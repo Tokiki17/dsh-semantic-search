@@ -93,6 +93,7 @@ The plugin's system prompt tells the model to search first for questions about d
 - Forcing the call (`search.enforce: docs`) or attaching hits (`prefetch`) did not help, so `search.enforce` is off by default.
 - What helped was the routing rule delivered as agent instructions. `search.instructions` (on by default, active once a semantic index exists) sends it the way DSH sends AGENTS.md, and sends it again when compaction removes it. Doc-fact questions then took about 0.78× the time, paraphrased ones about 0.75× the tokens, and code questions were unchanged within noise.
 - The same rule written in the project's or the user's `AGENTS.md` did slightly better. The rule text is in the Chinese README.
+- On large corpora (Kubernetes docs, 14 Chinese novels), grep alone answered every question when the agent could make as many tool calls as it liked. With only 5 tool calls, the plugin raised accuracy from 0.89–0.95 to 0.94–0.97, and to 0.95–0.99 with rerank on.
 
 ## Privacy
 

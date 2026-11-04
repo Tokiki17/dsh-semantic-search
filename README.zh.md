@@ -128,10 +128,11 @@ Key 按凭据名从 DSH 凭据库读取，找不到时再读环境变量或 `<DS
 
 ### 让模型用起来
 
-在 DSH 里用 `deepseek-flash` 实测（RogueReborn 仓库，20 道题，每题跑 4 次；另在 TileFillerBoardGenerator 上复测了压缩后重发和重排，见 [eval/README.md](eval/README.md)）：
+在 DSH 里用 `deepseek-flash` 实测（RogueReborn 仓库，20 道题，每题跑 4 次；另在 TileFillerBoardGenerator 上复测了压缩后重发和重排，在 Kubernetes 文档和中文小说上测了准确率，见 [eval/README.md](eval/README.md)）：
 
 - 只靠插件的系统提示词，模型几乎不调用 `knowledge_search`，40 次里只有 1–3 次。
 - 插件强制调用（`search.enforce: docs`）或预先附上命中（`prefetch`）都没有收益：模型搜完照样继续 grep。所以 `search.enforce` 默认关闭。
+- 在大语料（Kubernetes 文档、14 部中文小说）上，不限工具调用次数时只用 grep 也能全部答对；限 5 次调用时，插件把准确率从 0.89–0.95 提到 0.94–0.97，开重排为 0.95–0.99。
 - 有效的是把路由规则放进 agent 指令通道：
   - 插件默认开启的 `search.instructions`：文档事实类问题耗时降到约 0.78 倍，换说法问题的 token 降到约 0.75 倍，代码问题基本不变。
   - 把同一条规则写进项目的 `AGENTS.md` 或 `~/.agents/AGENTS.md`，效果更好：文档事实类问题耗时约 0.74 倍、token 约 0.71 倍，代码问题的 token 也少了约 20–28%。想要更好的效果，可以再加上这条：

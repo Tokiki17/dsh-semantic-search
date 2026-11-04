@@ -1,12 +1,12 @@
 # dsh-semantic-search
 
-A DeepSeek Harness (DSH) plugin bundle, "Semantic Search" (`@tokiki/dsh-semantic-search`, renamed from `@tokiki/dsh-qwen-rag` in 0.2): hybrid keyword + embedding + rerank search over the workspace and named collections, with a web setup page and plugin-managed local llama.cpp models. User docs: [README.md](README.md) / [README.zh.md](README.zh.md); design and research: [docs/research.zh.md](docs/research.zh.md); project knowledge: [okf/index.md](okf/index.md).
+A DeepSeek Harness (DSH) plugin bundle, "Semantic Search" (`@tokiki/dsh-semantic-search`, renamed from `@tokiki/dsh-qwen-rag` in 0.2): hybrid keyword + embedding + rerank search over the workspace and named collections, with a web setup page and plugin-managed local llama.cpp models. User docs: [README.md](README.md) / [README.zh.md](README.zh.md); design and research: [docs/research.zh.md](docs/research.zh.md) (next direction, conversation memory: §9); project knowledge: [okf/index.md](okf/index.md).
 
 ## Layout
 
 - `src/` host plugin (`lib/index.js`); `src/local/` llama.cpp runtime, model downloads and llama-server processes; `src/service.ts` + `src/typert.ts` the `semanticSearch` RPC for the setup page (`lib/typert.js`).
 - `src/client/` browser half (`lib/client.js`, React from the host), type-checked by its own `src/client/tsconfig.json`.
-- `src/enforce.ts` search steering: the routing rule sent as agent instructions (`search.instructions`) and optional enforcement (`search.enforce`); `eval/` the retrieval evaluation (question set, search daemon, MCP shim, runner, scorer, results in `eval/README.md`), not shipped.
+- `src/enforce.ts` search steering: the routing rule sent as agent instructions (`search.instructions`) and optional enforcement (`search.enforce`); `eval/` the retrieval evaluation (question sets, search daemon, MCP shim, runner, scorer, citation checker, tool-budget bundle `budget-plugin/`, `sandbox-exec` wrapper `sbx-dsh.sh` + `sandbox.sb`; results in `eval/README.md`), not shipped. Run DSH evaluations through the sandbox: an unsandboxed agent reads the answer keys.
 
 ## Commands
 

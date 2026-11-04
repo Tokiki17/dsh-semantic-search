@@ -229,3 +229,99 @@ R (rerank off) against R15 and R30 (Qwen3-Reranker 0.6B on, 15 or 30 candidates)
 - **Defaults changed:** `rerank.source` now defaults to `off`, and `search.rerankCandidates` to 15 for those who turn it on. On both repositories rerank off was faster with equal accuracy.
 
 **Limits:** 3 runs per cell; one model; in experiment 1 the forced threshold is far below real use, so compaction is much more frequent than it would be.
+
+## Results 2026-11-04 (accuracy on large corpora, DSH, sandboxed)
+
+The earlier repositories were too small to separate the configs on accuracy: every config answered almost everything. Two larger corpora, each with 20 questions written for it, test whether semantic search finds answers that grep and the model's memory miss.
+
+**Corpora:**
+- **K8s docs:** kubernetes/website at `8f6d976`, `content/en/docs` and `content/zh-cn/docs` (sparse checkout): 3,414 Markdown files, 44 MB; 3,420 indexed files, 53,181 chunks, indexed in 85 minutes with local Qwen3-Embedding 0.6B. Questions: [questions-k8s.json](questions-k8s.json), on feature gates and fields added in 1.33–1.37, so that the model is less likely to know them. Categories: exact (the name is in the question), paraphrase (the feature is described without its name), detail (versions, defaults, steps), absent (the gate or field does not exist; the right answer says so).
+- **Chinese novels:** 14 public-domain books from Project Gutenberg (ids 24079, 24139, 24154, 25237, 25243, 25248, 25348, 26738, 26871, 27104, 27108, 27216, 27328, 27331), one Markdown file per book with `## 第N回` headings: about 2.2 million characters, 2,349 chunks. Questions: [questions-novels.json](questions-novels.json), asked in traditional characters (N19 and N20 repeat N04 and N09 in simplified characters). Keypoints accept both scripts.
+
+**Configs** (`deepseek-flash`, DSH 0.2.1-rc.5 headless):
+
+| Config | Setup |
+|---|---|
+| XA | No plugin: DSH's own grep, read and bash |
+| XR | R: the plugin with rerank off, routing rule in AGENTS.md |
+| XRR | R with rerank on (Qwen3-Reranker 0.6B, 15 candidates) |
+
+Each config also loads [budget-plugin](budget-plugin/), an eval-only bundle that refuses tool calls after `EVAL_TOOL_BUDGET` of them in a run and tells the model to answer from what it has. Budget 0 is a closed-book run. Budget 5 is tight enough that finding the right file early matters. Unlimited runs show whether the configs differ when the agent can keep searching.
+
+### Isolation
+
+The first closed-book screening was invalid. The agent was free to read the whole disk, and several runs found and read `eval/questions-*.json` or the scratch folder with the corpora. Those runs are kept in `runs/invalid-leaked/`. A re-check of earlier results found no such read in RogueReborn's 600 runs and one in TileFillerBoardGenerator's 225: `tfbg-rerank/B3-R30-2` grepped `questions-tfbg.json`.
+
+All runs here go through [sbx-dsh.sh](sbx-dsh.sh), which starts DSH under macOS `sandbox-exec` with [sandbox.sb](sandbox.sb):
+- **Readable:** the corpus, DSH's home and the plugin build.
+- **Unreadable:** the rest of `~/Documents` (this repository's `eval/`, `docs/`, `okf/`, sources and Markdown included), the scratch folder, and the Claude and Codex transcripts.
+- **Writable:** only DSH's home and the index store.
+
+The rules deny `file-read-data` rather than `file-read*`, so path resolution still works. The wrapper sets `DSH_PERMISSION_MODE=danger-full-access`, because DSH's own seatbelt cannot nest inside another sandbox. The outer sandbox takes its place.
+
+```bash
+AGENT_BIN=eval/sbx-dsh.sh EVAL_SCRATCH=<scratch> DSH_HOME=<home> DSH_AGENTS_HOME_R=<rule dir> \
+  EVAL_QUESTIONS=eval/questions-k8s.json EVAL_TOOL_BUDGET=5 \
+  node eval/run.ts <corpus> eval/runs/acc-k8s-b5 --harness dsh --reps 3 --jobs 2 --configs XA,XR,XRR
+EVAL_QUESTIONS=eval/questions-k8s.json node eval/score.ts eval/runs/acc-k8s-b5 --overrides eval/overrides-k8s-b5.json
+EVAL_QUESTIONS=eval/questions-k8s.json node eval/cite.ts <corpus> eval/runs/acc-k8s-b5
+```
+
+### Closed book (budget 0, XA, 2 runs per question)
+
+| Corpus | Mean score | Memory-resistant questions (closed-book score < 0.5) |
+|---|---|---|
+| Novels | 0.21 | 17 of 20 |
+| K8s | 0.49 | 10 of 20 |
+
+On the novels the model knew only well-known facts (N13, Han Yu and Lu Qi in 斬鬼傳) and the two questions it could answer by refusing or guessing the obvious. On K8s it knew older gates partly and new ones not at all.
+
+### Accuracy
+
+Budget 5, 3 runs per question (60 per config); unlimited, 2 runs (40 per config). Scores after manual review: [overrides-novels-b5.json](overrides-novels-b5.json), [overrides-novels-free.json](overrides-novels-free.json), [overrides-k8s-b5.json](overrides-k8s-b5.json). The overrides fix answers that were right but worded differently from the keypoints, for example 「姓花名棟」 for 花棟.
+
+| Corpus | Budget | Config | Accuracy | Memory-resistant subset | Median s | Median tokens |
+|---|---|---|---|---|---|---|
+| Novels | 5 | XA | 0.950 | 0.941 | 10 | 47k |
+| | | XR | 0.968 | 0.962 | 9 | 55k |
+| | | XRR | 0.988 | 0.985 | 24 | 56k |
+| | unlimited | XA / XR / XRR | 1.000 / 1.000 / 1.000 | 1.000 | 11 / 8 / 27 | 66k / 59k / 56k |
+| K8s | 5 | XA | 0.892 | 0.839 | 11 | 38k |
+| | | XR | 0.939 | 0.900 | 9 | 40k |
+| | | XRR | 0.953 | 0.939 | 10 | 40k |
+| | unlimited | XA / XR / XRR | 1.000 / 1.000 / 1.000 | 1.000 | 10 / 11 / 11 | 52k / 59k / 71k |
+
+Accuracy difference against XA at budget 5 (mean of per-question differences, bootstrapped 95% CI):
+
+| Corpus | XR − XA | XRR − XA |
+|---|---|---|
+| Novels | +0.018 [−0.050, +0.107] | +0.038 [−0.025, +0.121] |
+| K8s | +0.047 [−0.019, +0.114] | +0.061 [+0.017, +0.114] |
+
+Time against XA (mean of per-question median ratios):
+
+| Corpus | Budget | XR | XRR |
+|---|---|---|---|
+| Novels | 5 | 0.93 [0.82–1.03] | 2.67 [2.12–3.28] |
+| Novels | unlimited | 0.85 [0.74–0.95] | 2.47 [1.91–3.04] |
+| K8s | 5 | 0.90 [0.75–1.07] | 0.98 [0.87–1.11] |
+| K8s | unlimited | 1.04 [0.79–1.31] | 0.93 [0.80–1.07] |
+
+**Findings:**
+- **With enough tool calls, grep alone answers everything.** Every config scored 1.000 on both corpora without a budget. Semantic search did not make an answer reachable that grep could not reach.
+- **Under a tight budget, semantic search helps a little.** At 5 calls, XR and XRR are ahead of XA on both corpora, most clearly on the memory-resistant questions. The difference is significant only for XRR on K8s. Most of XA's misses are honest: it found the right file, ran out of calls before reading the version line, and said so.
+- **Rerank costs a lot of time on the novels and little on K8s.** On the novels, XRR took about 2.5 times as long as XA for a small accuracy gain. Book passages are long, so scoring 15 of them is slow. K8s chunks are shorter, and the ranking was already good without rerank.
+- **Search targeting on the novels.** Counting `knowledge_search` calls whose results included the book that held the answer:
+  - XR: the right book ranked first in 69 of 82 calls.
+  - XRR: the right book ranked first in 81 of 83 calls.
+  - Most of XR's misses came from paraphrase questions: the model rewrote a traditional-script question into a simplified query, and the embedding then ranked another book first. In those runs grep found the answer afterwards.
+- **On K8s the model searched little.** Most K8s questions name a gate or field, and the routing rule sends exact identifiers to grep. XR averaged 0.4 `knowledge_search` calls per run, and even a paraphrase question (K02) was often answered by grepping keywords.
+- **Questions about things that do not exist cost XA most.** On K05 and K16, unlimited XA spent a median of 55 s and 342k tokens proving a negative with repeated greps. XR and XRR spent 24–28 s and 76–83k tokens. That is two questions, so treat it as a lead, not a result.
+- **Citations.** [cite.ts](cite.ts) checks every `path:line` the final answer cites: a citation counts as supported when a keypoint appears within 5 lines of it. With the plugin, more answers cite a location: on the novels at budget 5, 27 of 60 XA answers cited one, against 44 for XR and 51 for XRR. The share of citations that were supported stayed between 0.70 and 0.92 in every config. Search results carry `path:line`, which makes citing easy, but it does not make the cited line more often right.
+
+**Limits:**
+- One model, and 2–3 runs per question.
+- The questions were written by the same person who chose the corpora.
+- Budget 5 is an artificial setting, chosen to make retrieval quality matter.
+- The 0.6B embedding is the smallest local model; a larger one may rank the novels better.
+- The machine is a 16 GB Apple Silicon laptop. Four parallel jobs (four DSH processes, the two llama-servers, the K8s store and a desktop session) coincided with a kernel panic, so the K8s unlimited half ran with 2 jobs.
