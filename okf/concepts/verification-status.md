@@ -21,6 +21,14 @@ sources:
 
 State as of 2026-11-04, DSH 0.2.1-rc.5.
 
+## Verified for 0.2.1
+
+- Released 2026-11-04 as tag `v0.2.1` (commit `a69cc2e`), with the market index on `main` pointing to that commit.
+- Typecheck and the `node --test` suite (48 tests) pass, and the integration test passes against the bundled `lib/` (6 tests).[^tests]
+- The raw market index on GitHub passes DSH's `parseMarketIndex` and lists 0.2.1 at `a69cc2e`.
+- In a throwaway `DSH_HOME`, `dsh plugin --profile headless add github:Tokiki17/dsh-semantic-search#v0.2.1` installed 0.2.1; its `lib/` is byte-identical to the tested build, and the headless profile composes with the `semantic-search` row.
+- Not re-run for 0.2.1: the browser setup-page flows and the real local-model run listed under 0.2.0. The client changed only in the rerank hint text.
+
 ## Verified for 0.2.0
 
 - Typecheck (host and client programs) and the `node --test` suite pass, also against the bundled `lib/`. Beyond the 0.1 coverage it checks model-source resolution, keyword-only indexing and search, the move of a 0.1 store, resumable downloads with mirror fallback and sha256 rejection, llama-server start/restart/idle-stop with a stand-in executable, and the setup service against its typert manifest (draft tests, config writes, key writes that never overwrite another credential).[^tests]
