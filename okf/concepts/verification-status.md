@@ -1,10 +1,10 @@
 ---
 type: Status Report
 title: Verification status
-description: What has been verified for 0.2.0 (and earlier for 0.1.0), how, and what is still pending.
+description: What has been verified for 0.2.1 and 0.2.0 (and earlier for 0.1.0), how, and what is still pending.
 generated:
   by: process:doc-sync
-  at: 2026-11-04T13:30:00+08:00
+  at: 2026-11-04T20:00:00+08:00
 sources:
   - id: eval
     resource: ../../eval/README.md
@@ -28,7 +28,7 @@ State as of 2026-11-04, DSH 0.2.1-rc.5.
 - In a throwaway `DSH_HOME` running `dsh web` from a packed tarball: the client module starts, the setup page renders on the bundle page, and two flows completed in the browser: a custom online service (a local fake server requiring a test key; key stored only in the credential file, connection tests passed, patch written) and local embedding with rerank off (runtime downloaded from the page, local test started llama-server inside DSH, saved, no server left after the reload).
 - A throwaway headless profile still composes with the plugin installed.
 
-## Retrieval evaluation (unreleased working tree)
+## Retrieval evaluation (behind the 0.2.1 defaults)
 
 On 2026-11-03, 20 questions over the RogueReborn repository were run against Codex (200 runs) and DSH with `deepseek-flash` (260 runs); every answer was correct in every configuration. Measured from the time and token use:[^eval]
 - Without instructions the tool is rarely used.
@@ -63,7 +63,7 @@ Not covered: Claude Code (its CLI was not logged in on this machine), embedding 
 - The setup page's background rebuild of stale collections in a live host, background indexing through DSH's real jobs service, and installation through the Desktop plugin-market UI.
 - Local runtime on Linux and Windows hardware.
 - GPU/NPU builds for Windows and Linux x64: the catalog pins only llama.cpp's CPU builds there (`win-cpu-x64`, `ubuntu-x64`). Release b11765 also ships Vulkan, SYCL (Intel GPU), OpenVINO (Intel CPU/GPU/NPU), CUDA and ROCm builds. Plan: add Vulkan with sizes and sha256 in `src/local/catalog.ts`, try it first and fall back to CPU, and offer SYCL/OpenVINO as an acceleration choice on the setup page. Needs real hardware, e.g. a 64 GB Intel Core Ultra (358H-class) laptop; whether OpenVINO runs the embedding and rerank models on the NPU is unverified.
-- The 0.2.0 release itself: repository rename, tag, market index, npm publish and the dshopen listing.
+- npm publish and the dshopen listing (0.2.0 and 0.2.1 were released as git tags with the market index only).
 
 [^tests]: node --test suite
 [^bench]: Chinese README, local benchmark section

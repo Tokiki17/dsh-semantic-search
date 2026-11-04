@@ -1,6 +1,6 @@
 {
   "name": "@tokiki/dsh-semantic-search",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Semantic Search for DeepSeek Harness: hybrid keyword + embedding search with reranking over your workspace and document folders. Works with no model, local Qwen3 GGUF models the plugin downloads and runs, Alibaba Cloud Model Studio, SiliconFlow, or any OpenAI-compatible service.",
   "license": "MIT",
   "type": "module",
