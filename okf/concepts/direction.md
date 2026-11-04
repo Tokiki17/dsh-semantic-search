@@ -1,10 +1,10 @@
 ---
 type: Decision
 title: "Product direction: a retrieval-augmented context layer for DSH"
-description: Why the product moves from a semantic search tool to a context layer that injects what grep cannot reach, and the planned modules and order.
+description: Why the product moves from a semantic search tool to a context layer that injects what grep cannot reach, the planned modules and order, and the P0 token-ledger and hook findings.
 generated:
   by: process:doc-sync
-  at: 2026-11-04T16:00:00+08:00
+  at: 2026-11-04T18:00:00+08:00
 sources:
   - id: research
     resource: ../../docs/research.zh.md
@@ -43,11 +43,20 @@ Revised 2026-11-04 by the project owner. It replaces the same day's earlier deci
 6. Workspace document search, as it is now.
 
 **Roadmap:**
-- **P0:** measure where tokens go in real DSH sessions, and move evaluation from Q&A to multi-step tasks.
-- **P1:** offloading and memory, on shared storage. This first needs a check of whether `tools/post-execute` can replace tool output; so far it is only known to append.
-- **P2:** experience retrieval and dependency docs.
+- **P0:** measure where tokens go, and move evaluation from Q&A to multi-step tasks. The ledger and the hook check are done (below). The task-level evaluation is not.
+- **P1:** memory, and retrieval that cuts exploration steps, for example search results that carry enough text to make the follow-up read unnecessary.
+- **P2:** experience retrieval and dependency docs. Query-aware tool-output offloading is deferred until a task-level evaluation shows large outputs.
 - **P3:** the repository map, and further work on document search.
 
-**Open questions:** whether to rename the product again; whether to change DSH itself if the hooks cannot replace output; and the data boundary for stored turns and command output (proposed: local only, per project).
+**P0 results (2026-11-04)**, details in [docs/research.zh.md](../../docs/research.zh.md) §9.5 and the token ledger section of [eval/README.md](../../eval/README.md):
+- **Hooks:** according to the DSH 0.2.1-rc.5 package READMEs, `tools/post-execute` can replace tool output, so offloading needs no DSH change.
+  - DSH already ships `dsh-spill-policy` (on by default, 12,500 tokens, with a head/tail preview and a file path) and a tool-result pruner that runs at compaction.
+  - Compaction keeps the original events in the session log, and `dsh-session-query` serves history reads and search. Whether a plugin can use that service has not been tested.
+- **Ledger:** 1,315 DSH eval runs (`eval/ledger.ts`).
+  - The first prompt, about 9.2k tokens re-sent every step, is 46.5% of prompt tokens. Tool results are another 46.5%, almost all from search and read.
+  - Only 151 of 7,310 steps added more than 12.5k tokens. Exploration steps, not large outputs, are the cost.
+  - These are read-only Q&A runs, so build and test output is missing.
 
-**Status:** planned. None of modules 1–5 is implemented or measured.
+**Open questions:** whether to rename the product again, and the data boundary for stored turns and command output (proposed: local only, per project).
+
+**Status:** planned. None of modules 1–5 is implemented. P0 is partly done.

@@ -2,6 +2,7 @@
 
 ## 2026-11-04
 
+- P0 of the new direction: added `eval/ledger.ts` and its results (exploration steps, not large outputs, dominate tokens), and recorded the DSH hook findings (`tools/post-execute` can replace output; built-in spill policy and pruner). Lowered tool-output offloading in the roadmap. Updated the direction concept and coverage manifest.
 - Revised the product direction: from a semantic search tool to a retrieval-augmented context layer for DSH (memory, tool-output offloading, experience retrieval, dependency docs, repository map; document search kept). Rewrote research §9 and the direction concept, and updated the index and coverage row.
 - Accuracy evaluation on Kubernetes docs and Chinese novels, with an eval-only tool budget plugin and a `sandbox-exec` wrapper that hides answer keys from the agent (`eval/budget-plugin`, `eval/sandbox.sb`, `eval/sbx-dsh.sh`, `eval/cite.ts`). Updated the verification concept.
 - Recorded the next direction, conversation memory (raw-turn retrieval over past sessions and compacted context), with its evidence: our accuracy evaluation and the community memory benchmark. Added the direction concept and coverage rows.

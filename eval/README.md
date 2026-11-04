@@ -325,3 +325,40 @@ Time against XA (mean of per-question median ratios):
 - Budget 5 is an artificial setting, chosen to make retrieval quality matter.
 - The 0.6B embedding is the smallest local model; a larger one may rank the novels better.
 - The machine is a 16 GB Apple Silicon laptop. Four parallel jobs (four DSH processes, the two llama-servers, the K8s store and a desktop session) coincided with a kernel panic, so the K8s unlimited half ran with 2 jobs.
+
+## Token ledger 2026-11-04 (all DSH runs above)
+
+[ledger.ts](ledger.ts) reads the DSH headless logs in `eval/runs/` and splits each run's tokens by origin. It prints only aggregate numbers.
+
+```bash
+node eval/ledger.ts eval/runs [--json out.json]
+```
+
+**Method:**
+- Every step reports exact usage. A step's prompt is its input, cache-read and cache-write tokens.
+- The growth from one prompt to the next, minus the previous step's output, is what that step's tool results added. It is split among the step's calls by their logged result length. The log caps each result at 8,192 characters, so per-call sizes within a step are approximate, while step totals are exact.
+- A block added at step k is re-sent in every later step until a compaction, so its cost is counted once per step.
+- Codex runs and `invalid-leaked/` are excluded. 1,315 runs, 8,730 steps, 167 compactions.
+
+**Where the tokens go:**
+- **Totals:** prompt 97.8% (cache reads 85.7%, uncached 12.1%), output 2.2%.
+- **The first prompt:** system prompt, tool schemas, instructions and the user message. It is about 9.2k tokens at the median (p10 5.8k, p90 10.8k) and is re-sent every step, for 46.5% of all prompt tokens.
+- **Tool results:** 46.5% of prompt tokens, or 11.4k tokens added per run. That is about 70% of a run's uncached input.
+- **Earlier model output:** 6.3%. Reminders and other growth: 0.7%.
+
+Tool results by purpose, as a share of all prompt tokens:
+
+| Kind | Share | Calls | Mean tokens per call |
+|---|---|---|---|
+| search (`bash` rg/grep, `grep`) | 21.0% | 4,378 | about 1,430 |
+| read (`read`, `bash` cat/sed/head) | 21.0% | 4,266 | about 1,770 |
+| listing (`ls`, `find`, `wc`) | 2.1% | 466 | 1,040 |
+| git | 1.2% | 224 | 1,269 |
+| `knowledge_search` | 0.4% | 98 | 1,079 |
+| all others | under 1% | | |
+
+**Findings:**
+- **Exploration is the cost.** Search and read results are 42% of prompt tokens, and the per-step first prompt is another 46%. Both grow with the number of steps, so fewer, better-aimed steps save the most.
+- **Large outputs are rare in these runs.** The median step added 1,159 tokens (p90 5.4k, p99 16.5k). Only 151 of 7,310 steps added more than 12.5k, which is the size at which DSH's built-in spill policy already replaces output with a head/tail preview and a file path.
+- **Re-reads are small:** 955 of 4,159 file reads opened a file already read in the run, for 3.6% of prompt tokens. Identical repeated calls: 3.
+- **Limit:** these are Q&A runs on read-only repositories. Build and test output (`bash` running code: 10 calls) is almost absent, so the ledger cannot judge offloading for real coding tasks. This machine has a single, nearly empty real DSH session, so no real-use ledger was possible.
