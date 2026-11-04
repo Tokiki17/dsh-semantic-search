@@ -41,12 +41,12 @@
       },
       "versions": [
         {
-          "version": "0.2.0",
-          "publishTimestamp": 1793697114,
+          "version": "0.2.1",
+          "publishTimestamp": 1793773342,
           "source": {
             "type": "git",
             "url": "https://github.com/Tokiki17/dsh-semantic-search",
-            "commit": "04dbaa9779feb5eb83aa1fad9b5a894f7c58d827"
+            "commit": "a69cc2e1a2d8923ce20dd038726200246fa4fff1"
           },
           "engines": {
             "dsh": ">=0.2.1-rc.5 <0.3.0"
