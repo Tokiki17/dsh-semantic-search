@@ -2,6 +2,7 @@
 
 ## 2026-11-04
 
+- Removed the 0.2.0 → 0.2.1 upgrade notes from both READMEs: the plugin has no users yet, so upgrade paths are out of scope for now.
 - Published 0.2.1 (tag `v0.2.1`, market index at `a69cc2e`) and verified the remote market index and a GitHub install in a throwaway profile. Updated the verification concept and the distribution coverage row.
 - 0.2.1 release: search steering (`search.instructions` on, `search.enforce` off), rerank off by default with 15 candidates, and the `Store.open` lock fix. Added upgrade notes from 0.2.0 to both READMEs; updated the verification concept and coverage rows.
 - P0 of the new direction: added `eval/ledger.ts` and its results (exploration steps, not large outputs, dominate tokens), and recorded the DSH hook findings (`tools/post-execute` can replace output; built-in spill policy and pruner). Lowered tool-output offloading in the roadmap. Updated the direction concept and coverage manifest.

@@ -41,9 +41,6 @@ Before you use the CLI:
 The plugin is added to the profile's `dsh.profile.bundles`; reopen Desktop to load it.
 
 **Upgrading from 0.1 (`@tokiki/dsh-qwen-rag`):** uninstall the old package, install this one, and choose the model sources again on the setup page; the old `qwen-rag` row is no longer read. Existing indexes move from `<DSH home>/qwen-rag/` to `<DSH home>/semantic-search/` on first start, and 0.6B models downloaded to `~/.cache/dsh-qwen-rag/models/` are reused.
-
-**Upgrading from 0.2.0 to 0.2.1:** configuration and indexes carry over. Two defaults changed. Rerank is now off (`rerank.source: off`): a configuration saved from the 0.2.0 setup page states `rerank.source` and keeps it, but a hand-written one without that key stops reranking, so add `rerank.source: same` to keep it. `search.instructions` is now on (see [Tools](#tools)); set it to `false` if you do not want the routing rule.
-
 ## Configure
 
 Use the setup page under **Plugins → Semantic Search**. Each online source has a **Test connection** button that sends one real request; after a model change the page offers to rebuild stale collections in the background. Downloaded local models and their disk use are listed at the bottom, with a delete button. Models live in `<DSH home>/semantic-search/models/`; uninstalling the plugin does not delete them.

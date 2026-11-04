@@ -11,7 +11,7 @@ generated:
 
 | Concern | Authoritative source | Concept | Status | Gaps |
 |---|---|---|---|---|
-| Install, configure, upgrade from 0.1 and 0.2.0, tools, privacy | [README.zh.md](../../README.zh.md), [README.md](../../README.md) | [Model sources](backends.md) | current (0.2.1) | — |
+| Install, configure, upgrade from 0.1, tools, privacy | [README.zh.md](../../README.zh.md), [README.md](../../README.md) | [Model sources](backends.md) | current (0.2.1) | — |
 | Plugin structure, retrieval pipeline, setup page | [src/](../../src/index.ts), [docs/research.zh.md](../../docs/research.zh.md) §6 | [Architecture](architecture.md) | current | DSH web UI APIs are undocumented upstream |
 | Model sources, local runtime and downloads | [src/config.ts](../../src/config.ts), [src/local/](../../src/local/catalog.ts), [docs/research.zh.md](../../docs/research.zh.md) §4 | [Model sources](backends.md) | current | Linux/Windows local runtime not tested on hardware |
 | Model choice, local sizing, other providers | [docs/research.zh.md](../../docs/research.zh.md) §2, §4, §5 | [Model sources](backends.md) | current | 4B/8B local sizes are estimates, not measured |
